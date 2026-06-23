@@ -23,7 +23,7 @@ let pool = null;               // {id, code, name, starting_balance}
 let players = [], bets = [], wagers = [];
 let myId = null;               // id de jugador en este dispositivo
 let channel = null;
-let activeTab = "bets", betFilter = "open", createCat = "resultado";
+let activeTab = "bets", betFilter = "open", createCat = "resultado", createKind = "match";
 
 /* ---------- utilidades ---------- */
 const $  = id => document.getElementById(id);
@@ -238,11 +238,84 @@ function renderBets(){
 }
 
 function renderBetCard(b){
+  return b.kind==="match" ? renderMatchCard(b) : renderFreeCard(b);
+}
+
+function cardShell(b, inner, extraChip){
   const creator = byId(b.creator_id);
+  const betWagers = wagers.filter(w=>w.bet_id===b.id);
+  const totalPot = betWagers.reduce((s,w)=>s+Number(w.amount),0);
+  return `<div class="bet">
+    <div class="head">
+      <span class="chip cat">${extraChip}</span>
+      <span class="chip ${b.status}">${b.status==="open"?"Abierta":"Resuelta"}</span>
+    </div>
+    <h3>${escapeHtml(b.question)}</h3>
+    <div class="by">Creada por <b>${escapeHtml(creator?creator.name:"?")}</b> · bote ${fmt(totalPot)} 🪙</div>
+    ${inner}
+  </div>`;
+}
+
+/* ---- Pronóstico de partido (marcador escalonado) ---- */
+function renderMatchCard(b){
+  const myW = wagers.find(w=>w.bet_id===b.id && w.player_id===myId);
+  const betWagers = wagers.filter(w=>w.bet_id===b.id);
+  const oe = Number(b.odds_exact), ow = Number(b.odds_winner);
+
+  const score = b.status==="resolved"
+    ? `<div style="text-align:center; font-size:1.6rem; font-weight:800; margin:6px 0">
+         ${escapeHtml(b.team_a)} <span style="color:var(--gold)">${b.real_a} - ${b.real_b}</span> ${escapeHtml(b.team_b)}</div>`
+    : `<div style="text-align:center; font-size:1.15rem; font-weight:700; margin:6px 0">
+         ${escapeHtml(b.team_a)} <span class="muted">vs</span> ${escapeHtml(b.team_b)}</div>`;
+
+  const tiers = `<div class="tiers">
+      <span>🎯 Marcador exacto <b>×${oe.toFixed(2)}</b></span>
+      <span>✅ Solo ganador <b>×${ow.toFixed(2)}</b></span>
+    </div>`;
+
+  let mine = "";
+  if(myW){
+    mine = `<div class="mypick">Tu pronóstico: <b>${myW.pred_a}-${myW.pred_b}</b> · ${fmt(myW.amount)} 🪙</div>`;
+  }
+
+  let action = "";
+  if(b.status==="open"){
+    action = `<button class="btn sm" style="width:100%; margin-top:8px" onclick="openMatchWager('${b.id}')">${myW?"✏️ Cambiar mi pronóstico":"🎯 Pronosticar marcador"}</button>`;
+  }
+
+  // listado de pronósticos
+  let list = "";
+  if(betWagers.length){
+    list = `<div class="wager-list">${betWagers.map(w=>{
+      const p = byId(w.player_id);
+      let res="";
+      if(b.status==="resolved"){
+        if(w.pred_a===b.real_a && w.pred_b===b.real_b) res = ` <b style="color:var(--gold)">🎯 +${fmt(w.amount*oe)}</b>`;
+        else if(Math.sign(w.pred_a-w.pred_b)===Math.sign(b.real_a-b.real_b)) res = ` <b style="color:var(--green)">✅ +${fmt(w.amount*ow)}</b>`;
+        else res = ` <b style="color:var(--red)">-${fmt(w.amount)}</b>`;
+      }
+      return `<div class="w"><span><b>${escapeHtml(p?p.name:"?")}</b> → ${w.pred_a}-${w.pred_b}</span><span>${fmt(w.amount)} 🪙${res}</span></div>`;
+    }).join("")}</div>`;
+  }
+
+  let resolveCtl = "";
+  if(b.status==="open"){
+    resolveCtl = `<div class="row" style="margin-top:12px; align-items:center">
+      <input id="ra-${b.id}" type="number" min="0" placeholder="0" style="text-align:center">
+      <span style="flex:none">-</span>
+      <input id="rb-${b.id}" type="number" min="0" placeholder="0" style="text-align:center">
+      <button class="btn gold sm" style="flex:none" onclick="resolveMatch('${b.id}')">🏁 Resultado</button>
+    </div>`;
+  }
+
+  return cardShell(b, score+tiers+mine+action+list+resolveCtl, "🆚 Partido");
+}
+
+/* ---- Apuesta libre ---- */
+function renderFreeCard(b){
   const cat = CATEGORIES.find(c=>c.id===b.category);
   const myW = wagers.find(w=>w.bet_id===b.id && w.player_id===myId);
   const betWagers = wagers.filter(w=>w.bet_id===b.id);
-  const totalPot = betWagers.reduce((s,w)=>s+Number(w.amount),0);
 
   const opts = b.options.map(o=>{
     const isWin = b.status==="resolved" && b.winning_option_id===o.id;
@@ -284,17 +357,7 @@ function renderBetCard(b){
     </div>`;
   }
 
-  return `<div class="bet">
-    <div class="head">
-      <span class="chip cat">${cat?cat.label:b.category}</span>
-      <span class="chip ${b.status}">${b.status==="open"?"Abierta":"Resuelta"}</span>
-    </div>
-    <h3>${escapeHtml(b.question)}</h3>
-    <div class="by">Creada por <b>${escapeHtml(creator?creator.name:"?")}</b> · bote ${fmt(totalPot)} 🪙</div>
-    ${opts}
-    ${wagersHtml}
-    ${resolveCtl}
-  </div>`;
+  return cardShell(b, opts+wagersHtml+resolveCtl, cat?cat.label:b.category);
 }
 
 function renderLeaderboard(){
@@ -342,6 +405,12 @@ function emptyState(icon,title,sub){
 /* ============================================================
    CREAR APUESTA
    ============================================================ */
+function pickKind(kind){
+  createKind = kind;
+  document.querySelectorAll("#kindPills button").forEach(b=> b.classList.toggle("on", b.dataset.kind===kind));
+  $("matchFields").classList.toggle("hide", kind!=="match");
+  $("freeFields").classList.toggle("hide", kind!=="free");
+}
 function pickCat(id){
   createCat = id; renderCatPills();
   const cat = CATEGORIES.find(c=>c.id===id);
@@ -359,25 +428,39 @@ function addOptRow(){ $("optRows").insertAdjacentHTML("beforeend", optRowHtml())
 
 async function createBet(){
   if(!me()) return toast("No se ha identificado tu jugador", true);
-  const q = $("cQuestion").value.trim();
-  if(!q) return toast("Escribe la pregunta de la apuesta", true);
-  const rows = [...document.querySelectorAll("#optRows .optrow")];
-  const options = [];
-  for(const row of rows){
-    const label = row.querySelector(".olab").value.trim();
-    const odds = parseFloat(row.querySelector(".ood").value);
-    if(!label) continue;
-    if(!(odds>1)) return toast(`Pon una cuota válida (>1) en "${label}"`, true);
-    options.push({id:uid(), label, odds});
-  }
-  if(options.length<2) return toast("Necesitas al menos 2 opciones con cuota", true);
+  let payload;
 
-  const {error} = await sb.from("bets").insert({
-    pool_id:pool.id, creator_id:myId, category:createCat, question:q, options, status:"open"
-  });
+  if(createKind==="match"){
+    const a = $("cTeamA").value.trim(), b = $("cTeamB").value.trim();
+    const oe = parseFloat($("cOddsExact").value), ow = parseFloat($("cOddsWinner").value);
+    if(!a || !b) return toast("Escribe los dos equipos", true);
+    if(!(oe>1) || !(ow>1)) return toast("Las cuotas deben ser mayores que 1", true);
+    if(oe<=ow) return toast("La cuota del marcador exacto debe ser mayor que la de solo ganador", true);
+    payload = {
+      pool_id:pool.id, creator_id:myId, kind:"match", category:"partido",
+      question:`${a} vs ${b}`, team_a:a, team_b:b, odds_exact:oe, odds_winner:ow,
+      options:[], status:"open"
+    };
+  } else {
+    const q = $("cQuestion").value.trim();
+    if(!q) return toast("Escribe la pregunta de la apuesta", true);
+    const rows = [...document.querySelectorAll("#optRows .optrow")];
+    const options = [];
+    for(const row of rows){
+      const label = row.querySelector(".olab").value.trim();
+      const odds = parseFloat(row.querySelector(".ood").value);
+      if(!label) continue;
+      if(!(odds>1)) return toast(`Pon una cuota válida (>1) en "${label}"`, true);
+      options.push({id:uid(), label, odds});
+    }
+    if(options.length<2) return toast("Necesitas al menos 2 opciones con cuota", true);
+    payload = { pool_id:pool.id, creator_id:myId, kind:"free", category:createCat, question:q, options, status:"open" };
+  }
+
+  const {error} = await sb.from("bets").insert(payload);
   if(error) return toast("Error al publicar: "+error.message, true);
 
-  $("cQuestion").value=""; pickCat(createCat);
+  $("cQuestion").value=""; $("cTeamA").value=""; $("cTeamB").value=""; pickCat(createCat);
   betFilter="open"; setFilterUI(); switchTab("bets");
   toast("¡Apuesta publicada! 🎲");
 }
@@ -417,6 +500,45 @@ async function resolveBet(betId){
   if(error) return toast("Error: "+error.message, true);
   await refresh();
   toast("Apuesta resuelta y premios pagados 🏆");
+}
+
+/* ---- Pronóstico de partido ---- */
+async function openMatchWager(betId){
+  const u = me(); if(!u) return toast("No identificado", true);
+  const bet = bets.find(b=>b.id===betId); if(!bet || bet.status!=="open") return;
+  const existing = wagers.find(w=>w.bet_id===betId && w.player_id===myId);
+
+  const rawScore = prompt(`Tu marcador para ${bet.team_a} vs ${bet.team_b}\n(ejemplo: 2-1)`,
+    existing ? `${existing.pred_a}-${existing.pred_b}` : "");
+  if(rawScore===null) return;
+  const m = rawScore.trim().match(/^(\d+)\s*[-:]\s*(\d+)$/);
+  if(!m) return toast("Marcador no válido. Usa el formato 2-1", true);
+  const pa = parseInt(m[1],10), pb = parseInt(m[2],10);
+
+  const avail = Number(u.balance) + (existing?Number(existing.amount):0);
+  const oe = Number(bet.odds_exact), ow = Number(bet.odds_winner);
+  const raw = prompt(`Marcador ${pa}-${pb} en ${bet.team_a} vs ${bet.team_b}\n\n🎯 Si aciertas el marcador exacto: ×${oe.toFixed(2)}\n✅ Si aciertas solo el ganador: ×${ow.toFixed(2)}\n\nSaldo disponible: ${fmt(avail)} 🪙\n¿Cuánto apuestas?`, "");
+  if(raw===null) return;
+  const amount = Math.floor(Number(raw));
+  if(!(amount>0)) return toast("Cantidad no válida", true);
+  if(amount>avail) return toast("No tienes saldo suficiente", true);
+
+  const {error} = await sb.rpc("place_match_wager",
+    {p_bet_id:betId, p_player_id:myId, p_pred_a:pa, p_pred_b:pb, p_amount:amount});
+  if(error) return toast("Error: "+error.message, true);
+  await refresh();
+  toast(`Pronóstico ${pa}-${pb} · ${fmt(amount)} 🪙 · exacto paga ${fmt(amount*oe)} 🪙`);
+}
+
+async function resolveMatch(betId){
+  const bet = bets.find(b=>b.id===betId); if(!bet || bet.status!=="open") return;
+  const ra = parseInt($("ra-"+betId).value,10), rb = parseInt($("rb-"+betId).value,10);
+  if(!(ra>=0) || !(rb>=0)) return toast("Mete el resultado real (ej. 2 y 1)", true);
+  if(!confirm(`Resultado de ${bet.team_a} vs ${bet.team_b}: ${ra}-${rb}\n\nSe pagarán los premios (exacto y solo-ganador). No se puede deshacer.`)) return;
+  const {error} = await sb.rpc("resolve_match", {p_bet_id:betId, p_real_a:ra, p_real_b:rb});
+  if(error) return toast("Error: "+error.message, true);
+  await refresh();
+  toast("Partido resuelto y premios pagados 🏆");
 }
 
 /* ============================================================
@@ -464,6 +586,7 @@ function wire(){
   document.querySelectorAll("#tab-bets .filterbar button").forEach(b=>
     b.addEventListener("click", ()=>{ betFilter=b.dataset.f; setFilterUI(); renderBets(); }));
 
+  document.querySelectorAll("#kindPills button").forEach(b=> b.addEventListener("click", ()=>pickKind(b.dataset.kind)));
   $("addOpt").addEventListener("click", addOptRow);
   $("createBet").addEventListener("click", createBet);
   $("leaveBtn").addEventListener("click", leavePool);
@@ -471,12 +594,14 @@ function wire(){
 
   // exponer para handlers inline
   window.openWager=openWager; window.resolveBet=resolveBet;
+  window.openMatchWager=openMatchWager; window.resolveMatch=resolveMatch;
   window.pickCat=pickCat; window.claimPlayer=claimPlayer;
 
   // prefill config si ya existe
   const {url,key} = getConfig();
   $("cfgUrl").value = url; $("cfgKey").value = key;
 
+  pickKind(createKind);
   pickCat(createCat);
 }
 
