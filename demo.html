@@ -1,0 +1,1019 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="theme-color" content="#0a7d4a">
+<title>Porra del Mundial ⚽ — Apuestas entre amigos</title>
+<style>
+  :root{
+    --bg:#0a1410; --bg2:#0d1f17; --card:#102619; --card2:#16331f;
+    --txt:#eafff1; --muted:#8fb6a0; --line:#1e4030;
+    --green:#22c55e; --green-d:#15803d; --gold:#f5c542; --gold-d:#caa128;
+    --red:#f87171; --blue:#38bdf8;
+    --shadow:0 10px 30px rgba(0,0,0,.35);
+  }
+  *{box-sizing:border-box; -webkit-tap-highlight-color:transparent}
+  body{
+    margin:0; font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    background:radial-gradient(1200px 500px at 50% -10%, #14422c 0%, var(--bg2) 45%, var(--bg) 100%);
+    color:var(--txt); min-height:100vh; padding:0 0 90px;
+  }
+  .wrap{max-width:620px; margin:0 auto; padding:14px 14px 0}
+  header{text-align:center; padding:18px 0 8px}
+  header .logo{font-size:2rem; line-height:1}
+  header h1{font-size:1.45rem; margin:6px 0 2px; font-weight:800; letter-spacing:.3px}
+  header p{margin:0; color:var(--muted); font-size:.82rem}
+
+  .topbar{display:flex; align-items:center; justify-content:space-between; gap:10px;
+    background:var(--card); border:1px solid var(--line); border-radius:16px;
+    padding:10px 14px; margin-bottom:14px; box-shadow:var(--shadow)}
+  .topbar .who{display:flex; align-items:center; gap:10px; min-width:0}
+  .topbar .who .nm{font-weight:700; font-size:.95rem; line-height:1.1}
+  .topbar .who .nm small{display:block; color:var(--muted); font-weight:500; font-size:.66rem}
+  .avatar{width:38px; height:38px; border-radius:50%; flex:none; display:grid; place-items:center;
+    font-weight:800; color:#04130b; background:linear-gradient(160deg,var(--gold),var(--gold-d))}
+  .topbar .bal{text-align:right}
+  .topbar .bal b{font-size:1.05rem; color:var(--gold)}
+  .topbar .bal small{display:block; color:var(--muted); font-size:.66rem; text-transform:uppercase; letter-spacing:.5px}
+
+  .card{background:var(--card); border:1px solid var(--line); border-radius:18px;
+    padding:18px; margin-bottom:16px; box-shadow:var(--shadow)}
+  h2.section{font-size:1.05rem; margin:4px 0 14px; display:flex; align-items:center; gap:8px}
+  .muted{color:var(--muted)} .small{font-size:.8rem}
+  a{color:var(--blue)}
+
+  label{display:block; font-size:.78rem; color:var(--muted); margin:12px 0 5px; font-weight:600; text-transform:uppercase; letter-spacing:.4px}
+  input,select,textarea{width:100%; background:var(--bg2); border:1px solid var(--line); color:var(--txt);
+    border-radius:11px; padding:11px 12px; font-size:.95rem; font-family:inherit}
+  input:focus,select:focus,textarea:focus{outline:none; border-color:var(--green)}
+
+  .btn{appearance:none; border:none; cursor:pointer; font-family:inherit; font-weight:700;
+    border-radius:12px; padding:12px 16px; font-size:.95rem; color:#04130b;
+    background:linear-gradient(160deg,var(--green),var(--green-d)); width:100%;
+    transition:transform .06s ease, filter .15s ease}
+  .btn:active{transform:scale(.98)}
+  .btn.gold{background:linear-gradient(160deg,var(--gold),var(--gold-d))}
+  .btn.ghost{background:transparent; border:1px solid var(--line); color:var(--txt)}
+  .btn.danger{background:transparent; border:1px solid var(--red); color:var(--red)}
+  .btn.sm{width:auto; padding:8px 12px; font-size:.82rem}
+  .row{display:flex; gap:8px} .row > *{flex:1}
+
+  .chip{display:inline-flex; align-items:center; gap:5px; padding:3px 9px; border-radius:999px;
+    font-size:.7rem; font-weight:700; text-transform:uppercase; letter-spacing:.4px}
+  .chip.cat{background:rgba(56,189,248,.14); color:var(--blue)}
+  .chip.open{background:rgba(34,197,94,.16); color:var(--green)}
+  .chip.resolved{background:rgba(245,197,66,.16); color:var(--gold)}
+  .codetag{display:inline-block; font-weight:800; letter-spacing:2px; background:var(--bg2);
+    border:1px dashed var(--line); border-radius:10px; padding:4px 10px; color:var(--gold)}
+
+  .tabs{position:fixed; left:0; right:0; bottom:0; z-index:40; display:flex;
+    background:rgba(10,20,16,.92); backdrop-filter:blur(10px); border-top:1px solid var(--line)}
+  .tabs button{flex:1; background:none; border:none; color:var(--muted); cursor:pointer;
+    padding:10px 4px 14px; font-size:.66rem; font-weight:700; font-family:inherit;
+    display:flex; flex-direction:column; align-items:center; gap:3px}
+  .tabs button .ic{font-size:1.25rem}
+  .tabs button.active{color:var(--green)}
+
+  .bet{border:1px solid var(--line); border-radius:14px; padding:14px; margin-bottom:12px; background:var(--card2)}
+  .bet .head{display:flex; justify-content:space-between; align-items:flex-start; gap:8px; margin-bottom:4px}
+  .bet h3{font-size:1rem; margin:6px 0 2px; line-height:1.3}
+  .bet .by{font-size:.74rem; color:var(--muted); margin-bottom:10px}
+  .opt{display:flex; align-items:center; gap:10px; padding:10px 12px; border:1px solid var(--line);
+    border-radius:11px; margin-bottom:7px; background:var(--bg2); cursor:pointer; transition:border-color .12s}
+  .opt:hover{border-color:var(--green)}
+  .opt.sel{border-color:var(--green); background:rgba(34,197,94,.10)}
+  .opt.win{border-color:var(--gold); background:rgba(245,197,66,.12)}
+  .opt .lab{flex:1; font-weight:600; font-size:.92rem}
+  .opt .od{font-weight:800; color:var(--gold); font-variant-numeric:tabular-nums; text-align:right}
+  .opt .od small{color:var(--muted); font-weight:600; display:block; font-size:.6rem; text-transform:uppercase}
+  .opt .pot{font-size:.7rem; color:var(--muted)}
+
+  .tiers{display:flex; gap:8px; margin:8px 0}
+  .tiers span{flex:1; text-align:center; background:var(--bg2); border:1px solid var(--line);
+    border-radius:10px; padding:7px 6px; font-size:.74rem; color:var(--muted)}
+  .tiers span b{display:block; font-size:.95rem; color:var(--gold); margin-top:2px}
+  .tiers span:first-child b{color:var(--gold)} .tiers span:last-child b{color:var(--green)}
+  .mypick{text-align:center; font-size:.82rem; color:var(--muted); margin:6px 0 2px}
+  .mypick b{color:var(--green); font-size:1rem}
+  .wager-list{margin-top:10px; padding-top:10px; border-top:1px dashed var(--line); font-size:.8rem}
+  .wager-list .w{display:flex; justify-content:space-between; padding:3px 0; color:var(--muted)}
+  .wager-list .w b{color:var(--txt)}
+
+  .lb{display:flex; align-items:center; gap:12px; padding:12px 6px; border-bottom:1px solid var(--line)}
+  .lb:last-child{border-bottom:none}
+  .lb .pos{width:26px; text-align:center; font-weight:800; font-size:1.05rem; color:var(--muted)}
+  .lb .nm{flex:1; font-weight:700}
+  .lb .nm small{display:block; color:var(--muted); font-weight:500; font-size:.72rem}
+  .lb .mn{font-weight:800; color:var(--gold); font-variant-numeric:tabular-nums}
+
+  .optrow{display:flex; gap:8px; margin-bottom:8px; align-items:center}
+  .optrow input.olab{flex:3} .optrow input.ood{flex:1; min-width:0}
+  .optrow .x{flex:none; width:38px; height:42px; border:1px solid var(--line); background:var(--bg2); color:var(--red); border-radius:10px; cursor:pointer; font-size:1rem}
+
+  .pill-cats{display:flex; gap:7px; flex-wrap:wrap; margin-bottom:6px}
+  .pill-cats button{border:1px solid var(--line); background:var(--bg2); color:var(--muted); cursor:pointer;
+    border-radius:999px; padding:7px 12px; font-size:.78rem; font-weight:700; font-family:inherit}
+  .pill-cats button.on{border-color:var(--green); color:var(--green); background:rgba(34,197,94,.10)}
+
+  .empty{text-align:center; color:var(--muted); padding:30px 10px; font-size:.9rem}
+  .empty .big{font-size:2.4rem; display:block; margin-bottom:8px}
+
+  .toast{position:fixed; left:50%; bottom:84px; transform:translateX(-50%) translateY(20px);
+    background:var(--card2); border:1px solid var(--green); color:var(--txt);
+    padding:11px 18px; border-radius:12px; font-size:.85rem; font-weight:600;
+    opacity:0; pointer-events:none; transition:.25s; z-index:60; box-shadow:var(--shadow); max-width:90%}
+  .toast.show{opacity:1; transform:translateX(-50%) translateY(0)}
+  .toast.bad{border-color:var(--red)}
+
+  .filterbar{display:flex; gap:7px; margin-bottom:14px}
+  .filterbar button{flex:1; border:1px solid var(--line); background:var(--bg2); color:var(--muted); cursor:pointer;
+    border-radius:10px; padding:8px; font-size:.8rem; font-weight:700; font-family:inherit}
+  .filterbar button.on{border-color:var(--green); color:var(--green)}
+
+  .hide{display:none !important}
+  hr.sep{border:none; border-top:1px solid var(--line); margin:14px 0}
+  .ppl-item{display:flex; align-items:center; gap:10px; padding:8px 0; border-bottom:1px solid var(--line)}
+  .ppl-item:last-child{border-bottom:none}
+  .ppl-item .nm{flex:1; font-weight:600}
+  .ppl-item .nm small{display:block; color:var(--muted); font-weight:500; font-size:.74rem}
+  ol.steps{padding-left:18px; line-height:1.6; font-size:.86rem} ol.steps li{margin-bottom:6px}
+  code{background:var(--bg2); padding:1px 6px; border-radius:6px; font-size:.82rem}
+</style>
+</head>
+<body>
+
+<!-- ====================== SETUP (config Supabase) ====================== -->
+<section id="screen-setup" class="wrap hide">
+  <header><div class="logo">⚽🏆</div><h1>Porra del Mundial</h1><p>Configuración inicial</p></header>
+  <div class="card">
+    <h2 class="section">🔌 Conectar con Supabase</h2>
+    <p class="muted small">Esta web necesita una base de datos gratuita de <a href="https://supabase.com" target="_blank" rel="noopener">Supabase</a> para que todos los amigos jueguen sincronizados. Solo hay que hacerlo una vez.</p>
+    <ol class="steps muted">
+      <li>Crea una cuenta y un proyecto gratis en supabase.com.</li>
+      <li>En <b>SQL Editor</b> pega el contenido de <code>supabase-schema.sql</code> y pulsa <b>Run</b>.</li>
+      <li>En <b>Project Settings → API</b> copia la <b>Project URL</b> y la clave <b>anon public</b>.</li>
+      <li>Pégalas aquí abajo (o, mejor, en el archivo <code>config.js</code> para que sea permanente).</li>
+    </ol>
+    <label>Project URL</label>
+    <input id="cfgUrl" placeholder="https://xxxx.supabase.co">
+    <label>anon public key</label>
+    <input id="cfgKey" placeholder="eyJhbGciOiJI...">
+    <button class="btn" id="cfgSave" style="margin-top:14px">Conectar</button>
+  </div>
+</section>
+
+<!-- ====================== LOBBY (crear / unirse) ====================== -->
+<section id="screen-lobby" class="wrap hide">
+  <header><div class="logo">⚽🏆</div><h1>Porra del Mundial</h1><p>Dieciseisavos en adelante · dinero ficticio entre amigos</p></header>
+  <div class="card">
+    <h2 class="section">🆕 Crear una porra</h2>
+    <label>Nombre de la porra</label>
+    <input id="lobbyName" placeholder="Porra del Mundial 2026">
+    <label>Tu nombre</label>
+    <input id="lobbyMyName" placeholder="Cómo te verán tus amigos">
+    <label>Saldo inicial por jugador 🪙</label>
+    <input id="lobbyStart" type="number" min="1" value="1000">
+    <button class="btn" id="createPoolBtn" style="margin-top:14px">Crear y obtener código</button>
+  </div>
+  <div class="card">
+    <h2 class="section">🔗 Unirse a una porra</h2>
+    <p class="muted small" style="margin-top:-8px">¿Un amigo ya creó la porra? Pide su código y entra.</p>
+    <label>Código de la porra</label>
+    <input id="joinCode" placeholder="Ej: K7M2P" style="text-transform:uppercase; letter-spacing:2px; font-weight:700">
+    <button class="btn ghost" id="joinPoolBtn" style="margin-top:14px">Entrar</button>
+  </div>
+</section>
+
+<!-- ====================== PICK PLAYER (identidad) ====================== -->
+<section id="screen-pickplayer" class="wrap hide">
+  <header><div class="logo">👋</div><h1 id="ppPoolName">Porra</h1>
+    <p>código <span class="codetag" id="ppPoolCode">—</span></p></header>
+  <div class="card">
+    <h2 class="section">¿Quién eres?</h2>
+    <p class="muted small" style="margin-top:-8px">Elige tu nombre si ya estás en la lista, o únete como nuevo jugador.</p>
+    <div id="ppList" style="margin:8px 0 4px"></div>
+    <hr class="sep">
+    <label>Unirme como nuevo jugador</label>
+    <div class="row">
+      <input id="ppNewName" placeholder="Tu nombre">
+      <button class="btn sm" id="ppCreateBtn" style="flex:none; padding:11px 16px">Unirme</button>
+    </div>
+    <button class="btn ghost sm" id="ppLeave" style="margin-top:14px">← Volver</button>
+  </div>
+</section>
+
+<!-- ====================== APP ====================== -->
+<section id="screen-app" class="hide">
+  <div class="wrap">
+    <header>
+      <div class="logo">⚽🏆</div>
+      <h1 id="poolTitle">Porra del Mundial</h1>
+      <p><span class="codetag" id="poolCodeTag">código —</span></p>
+    </header>
+
+    <div class="topbar">
+      <div class="who">
+        <div class="avatar" id="avatar">?</div>
+        <div class="nm" id="userName">—<small>tú</small></div>
+      </div>
+      <div class="bal"><b id="userBal">0</b><small>tu saldo 🪙</small></div>
+    </div>
+
+    <section id="tab-bets">
+      <div class="filterbar">
+        <button data-f="open" class="on">🟢 Abiertas</button>
+        <button data-f="resolved">🏁 Resueltas</button>
+        <button data-f="mine">👤 Mías</button>
+      </div>
+      <div id="betList"></div>
+    </section>
+
+    <section id="tab-create" class="hide">
+      <div class="card">
+        <h2 class="section">➕ Crear apuesta</h2>
+        <label>¿Qué quieres crear?</label>
+        <div class="pill-cats" id="kindPills">
+          <button data-kind="match" class="on">🆚 Pronóstico de partido</button>
+          <button data-kind="free">✨ Apuesta libre (por fuera)</button>
+        </div>
+
+        <!-- ---- Pronóstico de partido (marcador escalonado) ---- -->
+        <div id="matchFields">
+          <p class="muted small">Cada amigo pronostica el <b>marcador</b>. Al acabar metes el resultado y se paga por niveles: <b style="color:var(--gold)">marcador exacto</b> paga más que acertar <b style="color:var(--green)">solo el ganador</b>.</p>
+          <div class="row">
+            <div><label>Equipo local</label><input id="cTeamA" placeholder="España"></div>
+            <div><label>Equipo visitante</label><input id="cTeamB" placeholder="Brasil"></div>
+          </div>
+          <div class="row">
+            <div><label>🎯 Cuota marcador exacto</label><input id="cOddsExact" type="number" step="0.01" min="1.01" value="5"></div>
+            <div><label>✅ Cuota solo ganador</label><input id="cOddsWinner" type="number" step="0.01" min="1.01" value="1.8"></div>
+          </div>
+        </div>
+
+        <!-- ---- Apuesta libre ---- -->
+        <div id="freeFields" class="hide">
+          <p class="muted small">Inventa la apuesta que quieras y ponle cuotas como una casa de apuestas. Premio = apostado × cuota de la opción acertada.</p>
+          <label>Tipo</label>
+          <div class="pill-cats" id="catPills"></div>
+          <label>Pregunta / Evento</label>
+          <input id="cQuestion" placeholder="Ej: ¿Quién marca el primer gol?">
+          <label>Opciones y sus cuotas</label>
+          <div id="optRows"></div>
+          <button class="btn ghost sm" id="addOpt" style="margin-top:2px">+ Añadir opción</button>
+        </div>
+
+        <hr class="sep">
+        <button class="btn" id="createBet">🎲 Publicar apuesta</button>
+      </div>
+    </section>
+
+    <section id="tab-rank" class="hide">
+      <div class="card"><h2 class="section">🏆 Clasificación</h2><div id="leaderboard"></div></div>
+    </section>
+
+    <section id="tab-people" class="hide">
+      <div class="card">
+        <h2 class="section">📣 Invitar amigos</h2>
+        <p class="muted small" style="margin-top:-8px">Comparte este código y que entren desde <b>Unirse a una porra</b>:</p>
+        <div class="row" style="align-items:center">
+          <div style="flex:2"><span class="codetag" id="infoPoolCode" style="font-size:1.3rem">—</span></div>
+          <button class="btn gold sm" id="copyCodeBtn" style="flex:1">📋 Copiar</button>
+        </div>
+      </div>
+      <div class="card">
+        <h2 class="section">👥 Jugadores · <span id="infoPoolName" class="muted" style="font-weight:600"></span></h2>
+        <div id="peopleList"></div>
+        <hr class="sep">
+        <button class="btn ghost sm" id="leaveBtn">Salir / cambiar de porra</button>
+      </div>
+    </section>
+  </div>
+
+  <div class="tabs" id="tabs">
+    <button data-tab="bets" class="active"><span class="ic">🎲</span>Apuestas</button>
+    <button data-tab="create"><span class="ic">➕</span>Crear</button>
+    <button data-tab="rank"><span class="ic">🏆</span>Ranking</button>
+    <button data-tab="people"><span class="ic">👥</span>Amigos</button>
+  </div>
+</section>
+
+<div class="toast" id="toast"></div>
+
+
+<script>
+/* === MODO DEMO: base de datos simulada en el navegador (sin servidor) === */
+(function(){
+  const KEY='porra.demo.db';
+  const SEED={"pools":[{"id":"p1","code":"DEMO1","name":"Porra de la peña (DEMO)","starting_balance":1000}],"players":[{"id":"pl1","pool_id":"p1","name":"Dani","balance":1530},{"id":"pl2","pool_id":"p1","name":"Lucía","balance":932},{"id":"pl3","pool_id":"p1","name":"Marco","balance":820},{"id":"pl4","pool_id":"p1","name":"Sara","balance":1000}],"bets":[{"id":"b1","pool_id":"p1","creator_id":"pl1","kind":"match","category":"partido","question":"España vs Brasil","team_a":"España","team_b":"Brasil","odds_exact":5,"odds_winner":1.8,"status":"open","options":[],"created_at":"2026-06-23T10:00:00Z"},{"id":"b3","pool_id":"p1","creator_id":"pl3","kind":"free","category":"goleador","question":"¿Quién marca el primer gol en España-Brasil?","options":[{"id":"o1","label":"Lamine Yamal","odds":3},{"id":"o2","label":"Vinícius Jr","odds":3.5},{"id":"o3","label":"Nadie (0-0 al descanso)","odds":6}],"status":"open","created_at":"2026-06-23T09:00:00Z"},{"id":"b2","pool_id":"p1","creator_id":"pl2","kind":"match","category":"partido","question":"Francia vs Argentina","team_a":"Francia","team_b":"Argentina","odds_exact":6,"odds_winner":1.9,"status":"resolved","real_a":3,"real_b":1,"options":[],"created_at":"2026-06-22T10:00:00Z"},{"id":"b4","pool_id":"p1","creator_id":"pl1","kind":"free","category":"sino","question":"¿Habrá prórroga en Francia-Argentina?","options":[{"id":"s1","label":"Sí","odds":2.2},{"id":"s2","label":"No","odds":1.6}],"status":"resolved","winning_option_id":"s2","created_at":"2026-06-22T09:00:00Z"}],"wagers":[{"id":"w1","bet_id":"b1","pool_id":"p1","player_id":"pl2","pred_a":2,"pred_b":1,"amount":100},{"id":"w2","bet_id":"b1","pool_id":"p1","player_id":"pl3","pred_a":1,"pred_b":0,"amount":50},{"id":"w3","bet_id":"b2","pool_id":"p1","player_id":"pl1","pred_a":3,"pred_b":1,"amount":100},{"id":"w4","bet_id":"b2","pool_id":"p1","player_id":"pl2","pred_a":2,"pred_b":0,"amount":80},{"id":"w5","bet_id":"b2","pool_id":"p1","player_id":"pl3","pred_a":1,"pred_b":2,"amount":60},{"id":"w6","bet_id":"b3","pool_id":"p1","player_id":"pl3","option_id":"o1","amount":70},{"id":"w7","bet_id":"b4","pool_id":"p1","player_id":"pl1","option_id":"s2","amount":50},{"id":"w8","bet_id":"b4","pool_id":"p1","player_id":"pl2","option_id":"s1","amount":40}]};
+  function loadDB(){ try{const r=localStorage.getItem(KEY); if(r) return JSON.parse(r);}catch(e){} return JSON.parse(JSON.stringify(SEED)); }
+  let DB=loadDB();
+  const persist=()=>localStorage.setItem(KEY,JSON.stringify(DB));
+  const rid=()=>'x'+Math.random().toString(36).slice(2,10);
+  const P=id=>DB.players.find(p=>p.id===id);
+  const Bt=id=>DB.bets.find(b=>b.id===id);
+  const sign=n=>n>0?1:(n<0?-1:0);
+  const pw=(betId,plId)=>DB.wagers.filter(w=>w.bet_id===betId&&w.player_id===plId);
+
+  function tableApi(table){
+    const q={table,_s:null,_f:[],_ins:null};
+    q.select=()=>q; q.order=()=>q;
+    q.eq=(c,v)=>{q._f.push([c,v]);return q;};
+    q.insert=r=>{q._ins=r;return q;};
+    q.single=()=>{q._s='one';return q;};
+    q.maybeSingle=()=>{q._s='maybe';return q;};
+    q.then=res=>res(run(q));
+    return q;
+  }
+  function run(q){
+    if(q._ins){
+      const row=Object.assign({id:rid(),created_at:new Date().toISOString()},q._ins);
+      DB[q.table].push(row); persist();
+      return {data:q._s?row:[row],error:null};
+    }
+    let rows=DB[q.table].slice();
+    q._f.forEach(([c,v])=>rows=rows.filter(r=>String(r[c])===String(v)));
+    if(q._s==='one')   return {data:rows[0]||null,error:rows[0]?null:{message:'sin filas'}};
+    if(q._s==='maybe') return {data:rows[0]||null,error:null};
+    return {data:rows,error:null};
+  }
+  function placeWager(betId,plId,optId,amount){
+    const b=Bt(betId); if(!b) throw new Error('Apuesta no encontrada');
+    if(b.status!=='open') throw new Error('La apuesta ya esta cerrada');
+    if(amount<=0) throw new Error('Cantidad no valida');
+    const prev=pw(betId,plId).reduce((s,w)=>s+Number(w.amount),0);
+    const pl=P(plId); if(Number(pl.balance)+prev<amount) throw new Error('Saldo insuficiente');
+    DB.wagers=DB.wagers.filter(w=>!(w.bet_id===betId&&w.player_id===plId));
+    pl.balance=Number(pl.balance)+prev-amount;
+    DB.wagers.push({id:rid(),bet_id:betId,pool_id:b.pool_id,player_id:plId,option_id:optId,amount});
+  }
+  function resolveBet(betId,winId){
+    const b=Bt(betId); if(!b||b.status!=='open') throw new Error('No se puede resolver');
+    const o=b.options.find(x=>x.id===winId); const odds=Number(o.odds);
+    DB.wagers.filter(w=>w.bet_id===betId&&w.option_id===winId).forEach(w=>{const pl=P(w.player_id); pl.balance=Number(pl.balance)+Number(w.amount)*odds;});
+    b.status='resolved'; b.winning_option_id=winId; b.resolved_at=new Date().toISOString();
+  }
+  function placeMatch(betId,plId,pa,pb,amount){
+    const b=Bt(betId); if(!b) throw new Error('Apuesta no encontrada');
+    if(b.kind!=='match') throw new Error('No es un partido');
+    if(b.status!=='open') throw new Error('El partido ya esta cerrado');
+    if(amount<=0) throw new Error('Cantidad no valida');
+    if(pa<0||pb<0) throw new Error('Marcador no valido');
+    const prev=pw(betId,plId).reduce((s,w)=>s+Number(w.amount),0);
+    const pl=P(plId); if(Number(pl.balance)+prev<amount) throw new Error('Saldo insuficiente');
+    DB.wagers=DB.wagers.filter(w=>!(w.bet_id===betId&&w.player_id===plId));
+    pl.balance=Number(pl.balance)+prev-amount;
+    DB.wagers.push({id:rid(),bet_id:betId,pool_id:b.pool_id,player_id:plId,pred_a:pa,pred_b:pb,amount});
+  }
+  function resolveMatch(betId,ra,rb){
+    const b=Bt(betId); if(!b||b.status!=='open') throw new Error('No se puede resolver');
+    const oe=Number(b.odds_exact),ow=Number(b.odds_winner),rs=sign(ra-rb);
+    DB.wagers.filter(w=>w.bet_id===betId).forEach(w=>{const pl=P(w.player_id);
+      if(w.pred_a===ra&&w.pred_b===rb) pl.balance=Number(pl.balance)+Number(w.amount)*oe;
+      else if(sign(w.pred_a-w.pred_b)===rs) pl.balance=Number(pl.balance)+Number(w.amount)*ow;
+    });
+    b.status='resolved'; b.real_a=ra; b.real_b=rb; b.resolved_at=new Date().toISOString();
+  }
+  function rpc(fn,a){
+    try{
+      if(fn==='place_wager') placeWager(a.p_bet_id,a.p_player_id,a.p_option_id,a.p_amount);
+      else if(fn==='resolve_bet') resolveBet(a.p_bet_id,a.p_winning_option_id);
+      else if(fn==='place_match_wager') placeMatch(a.p_bet_id,a.p_player_id,a.p_pred_a,a.p_pred_b,a.p_amount);
+      else if(fn==='resolve_match') resolveMatch(a.p_bet_id,a.p_real_a,a.p_real_b);
+      persist(); return Promise.resolve({data:null,error:null});
+    }catch(e){ return Promise.resolve({data:null,error:{message:e.message}}); }
+  }
+
+  window.PORRA_CONFIG={SUPABASE_URL:'demo',SUPABASE_ANON_KEY:'demo'};
+  window.supabase={createClient:()=>({from:tableApi,rpc,channel:()=>({on(){return this;},subscribe(){return this;}}),removeChannel:()=>{}})};
+  if(!localStorage.getItem('porra.poolCode')){
+    localStorage.setItem('porra.poolCode',DB.pools[0].code);
+    localStorage.setItem('porra.player.'+DB.pools[0].code,DB.players[0].id);
+  }
+})();
+</script>
+<script>
+"use strict";
+/* ============================================================
+   Porra del Mundial — multijugador online con Supabase
+   ============================================================ */
+
+const CATEGORIES = [
+  {id:"resultado", label:"🥅 Resultado (1X2)", opts:["Gana local","Empate","Gana visitante"]},
+  {id:"marcador",  label:"🔢 Marcador exacto", opts:["1-0","2-1","0-0"]},
+  {id:"goleador",  label:"⚽ Goleador",         opts:[]},
+  {id:"sino",      label:"🔀 Sí / No",          opts:["Sí","No"]},
+  {id:"especial",  label:"✨ Especial",          opts:[]},
+];
+
+const LS = {
+  url:  "porra.cfg.url",
+  key:  "porra.cfg.key",
+  pool: "porra.poolCode",
+  player: code => "porra.player." + code,
+};
+
+let sb = null;                 // cliente supabase
+let pool = null;               // {id, code, name, starting_balance}
+let players = [], bets = [], wagers = [];
+let myId = null;               // id de jugador en este dispositivo
+let channel = null;
+let activeTab = "bets", betFilter = "open", createCat = "resultado", createKind = "match";
+
+/* ---------- utilidades ---------- */
+const $  = id => document.getElementById(id);
+const uid = () => Math.random().toString(36).slice(2,9);
+const fmt = n => Math.round(Number(n)||0).toLocaleString("es-ES");
+const byId = id => players.find(p=>p.id===id);
+const initials = name => (name||"?").trim().slice(0,2).toUpperCase();
+const me = () => byId(myId);
+function escapeHtml(s){ return String(s).replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c])); }
+function toast(msg, bad=false){
+  const t = $("toast");
+  t.textContent = msg; t.classList.toggle("bad", bad); t.classList.add("show");
+  clearTimeout(t._t); t._t = setTimeout(()=>t.classList.remove("show"), 2600);
+}
+function show(screen){
+  ["setup","lobby","pickplayer","app"].forEach(s=> $("screen-"+s).classList.toggle("hide", s!==screen));
+}
+
+/* ============================================================
+   CONFIG / CLIENTE
+   ============================================================ */
+function getConfig(){
+  const url = localStorage.getItem(LS.url) || (window.PORRA_CONFIG && window.PORRA_CONFIG.SUPABASE_URL) || "";
+  const key = localStorage.getItem(LS.key) || (window.PORRA_CONFIG && window.PORRA_CONFIG.SUPABASE_ANON_KEY) || "";
+  return {url:url.trim(), key:key.trim()};
+}
+function initClient(){
+  const {url,key} = getConfig();
+  if(!url || !key) return false;
+  if(!window.supabase){ toast("No se pudo cargar Supabase", true); return false; }
+  sb = window.supabase.createClient(url, key, { realtime:{ params:{ eventsPerSecond:5 } } });
+  return true;
+}
+
+/* ============================================================
+   ARRANQUE
+   ============================================================ */
+async function boot(){
+  if(!initClient()){ show("setup"); return; }
+  const code = localStorage.getItem(LS.pool);
+  if(code){
+    const ok = await enterPool(code, /*silent*/true);
+    if(ok) return;
+  }
+  show("lobby");
+}
+
+/* ============================================================
+   POOLS (porras)
+   ============================================================ */
+function randomCode(){
+  const chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+  let c=""; for(let i=0;i<5;i++) c+=chars[Math.floor(Math.random()*chars.length)];
+  return c;
+}
+
+async function createPool(){
+  const name = $("lobbyName").value.trim() || "Porra del Mundial 2026";
+  const start = Math.max(1, Math.floor(Number($("lobbyStart").value)||1000));
+  const myName = $("lobbyMyName").value.trim();
+  if(!myName) return toast("Escribe tu nombre", true);
+
+  let code, inserted=null;
+  for(let attempt=0; attempt<5 && !inserted; attempt++){
+    code = randomCode();
+    const {data,error} = await sb.from("pools")
+      .insert({code, name, starting_balance:start}).select().single();
+    if(!error){ inserted = data; break; }
+    if(error.code !== "23505") return toast("Error al crear la porra: "+error.message, true);
+  }
+  if(!inserted) return toast("No se pudo generar un código, reinténtalo", true);
+
+  pool = inserted;
+  const {data:player,error:e2} = await sb.from("players")
+    .insert({pool_id:pool.id, name:myName, balance:start}).select().single();
+  if(e2) return toast("Error al crear tu jugador: "+e2.message, true);
+
+  myId = player.id;
+  localStorage.setItem(LS.pool, pool.code);
+  localStorage.setItem(LS.player(pool.code), myId);
+  await afterEnter();
+  toast(`Porra creada · código ${pool.code} 🎉`);
+}
+
+async function joinPoolFromInput(){
+  const code = ($("joinCode").value||"").trim().toUpperCase();
+  if(!code) return toast("Escribe el código de la porra", true);
+  await enterPool(code);
+}
+
+async function enterPool(code, silent=false){
+  code = code.trim().toUpperCase();
+  const {data,error} = await sb.from("pools").select().eq("code", code).maybeSingle();
+  if(error){ if(!silent) toast("Error: "+error.message, true); return false; }
+  if(!data){ if(!silent) toast("No existe ninguna porra con ese código", true); return false; }
+  pool = data;
+  localStorage.setItem(LS.pool, pool.code);
+  myId = localStorage.getItem(LS.player(pool.code)) || null;
+  await afterEnter();
+  return true;
+}
+
+async function afterEnter(){
+  await refresh();
+  // si el jugador guardado ya no existe, pedir identidad
+  if(myId && !byId(myId)){ myId = null; localStorage.removeItem(LS.player(pool.code)); }
+  subscribe();
+  if(!myId){ renderPickPlayer(); show("pickplayer"); }
+  else { renderApp(); show("app"); }
+}
+
+function leavePool(){
+  if(channel){ sb.removeChannel(channel); channel=null; }
+  localStorage.removeItem(LS.pool);
+  pool=null; myId=null; players=[]; bets=[]; wagers=[];
+  show("lobby");
+  $("joinCode").value=""; $("lobbyName").value=""; $("lobbyMyName").value="";
+}
+
+/* ============================================================
+   DATOS + TIEMPO REAL
+   ============================================================ */
+async function refresh(){
+  if(!pool) return;
+  const [rp, rb, rw] = await Promise.all([
+    sb.from("players").select().eq("pool_id", pool.id),
+    sb.from("bets").select().eq("pool_id", pool.id).order("created_at",{ascending:true}),
+    sb.from("wagers").select().eq("pool_id", pool.id),
+  ]);
+  players = rp.data || [];
+  bets    = rb.data || [];
+  wagers  = rw.data || [];
+  if(!$("screen-app").classList.contains("hide")) renderApp();
+  if(!$("screen-pickplayer").classList.contains("hide")) renderPickPlayer();
+}
+
+function subscribe(){
+  if(channel){ sb.removeChannel(channel); channel=null; }
+  channel = sb.channel("pool-"+pool.id);
+  ["players","bets","wagers"].forEach(table=>{
+    channel.on("postgres_changes",
+      {event:"*", schema:"public", table, filter:"pool_id=eq."+pool.id},
+      ()=>refresh());
+  });
+  channel.subscribe();
+}
+
+/* ============================================================
+   RENDER — pantalla de identidad
+   ============================================================ */
+function renderPickPlayer(){
+  $("ppPoolName").textContent = pool.name;
+  $("ppPoolCode").textContent = pool.code;
+  const list = $("ppList");
+  if(players.length===0){
+    list.innerHTML = `<p class="muted small">Aún no hay nadie. Crea tu jugador abajo 👇</p>`;
+  }else{
+    list.innerHTML = players.map(p=>`
+      <div class="ppl-item">
+        <div class="avatar" style="width:34px;height:34px;font-size:.85rem">${initials(p.name)}</div>
+        <div class="nm">${escapeHtml(p.name)}<small>${fmt(p.balance)} 🪙</small></div>
+        <button class="btn ghost sm" onclick="claimPlayer('${p.id}')">Soy yo</button>
+      </div>`).join("");
+  }
+}
+async function claimPlayer(id){
+  myId = id; localStorage.setItem(LS.player(pool.code), id);
+  renderApp(); show("app"); toast("Hola de nuevo, "+byId(id).name+" 👋");
+}
+async function createPlayer(){
+  const name = $("ppNewName").value.trim();
+  if(!name) return toast("Escribe tu nombre", true);
+  const {data,error} = await sb.from("players")
+    .insert({pool_id:pool.id, name, balance:pool.starting_balance}).select().single();
+  if(error) return toast("Error: "+error.message, true);
+  myId = data.id; localStorage.setItem(LS.player(pool.code), myId);
+  await refresh(); renderApp(); show("app");
+  toast(`¡Bienvenido a la porra, ${name}! 🎉`);
+}
+
+/* ============================================================
+   RENDER — app principal
+   ============================================================ */
+function renderApp(){
+  $("poolTitle").textContent = pool.name;
+  $("poolCodeTag").textContent = "código " + pool.code;
+  renderTopbar();
+  renderBets();
+  renderLeaderboard();
+  renderPeople();
+  renderCatPills();
+}
+
+function renderTopbar(){
+  const u = me();
+  $("avatar").textContent = u ? initials(u.name) : "?";
+  $("userName").textContent = u ? u.name : "—";
+  $("userBal").textContent = u ? fmt(u.balance) : "0";
+}
+
+function renderBets(){
+  const list = $("betList");
+  let arr = [...bets].reverse();
+  if(betFilter==="open")     arr = arr.filter(b=>b.status==="open");
+  if(betFilter==="resolved") arr = arr.filter(b=>b.status==="resolved");
+  if(betFilter==="mine")     arr = arr.filter(b=>b.creator_id===myId);
+  if(arr.length===0){
+    list.innerHTML = emptyState("🎲","No hay apuestas aquí","Crea la primera en la pestaña <b>Crear</b>.");
+    return;
+  }
+  list.innerHTML = arr.map(renderBetCard).join("");
+}
+
+function renderBetCard(b){
+  return b.kind==="match" ? renderMatchCard(b) : renderFreeCard(b);
+}
+
+function cardShell(b, inner, extraChip){
+  const creator = byId(b.creator_id);
+  const betWagers = wagers.filter(w=>w.bet_id===b.id);
+  const totalPot = betWagers.reduce((s,w)=>s+Number(w.amount),0);
+  return `<div class="bet">
+    <div class="head">
+      <span class="chip cat">${extraChip}</span>
+      <span class="chip ${b.status}">${b.status==="open"?"Abierta":"Resuelta"}</span>
+    </div>
+    <h3>${escapeHtml(b.question)}</h3>
+    <div class="by">Creada por <b>${escapeHtml(creator?creator.name:"?")}</b> · bote ${fmt(totalPot)} 🪙</div>
+    ${inner}
+  </div>`;
+}
+
+/* ---- Pronóstico de partido (marcador escalonado) ---- */
+function renderMatchCard(b){
+  const myW = wagers.find(w=>w.bet_id===b.id && w.player_id===myId);
+  const betWagers = wagers.filter(w=>w.bet_id===b.id);
+  const oe = Number(b.odds_exact), ow = Number(b.odds_winner);
+
+  const score = b.status==="resolved"
+    ? `<div style="text-align:center; font-size:1.6rem; font-weight:800; margin:6px 0">
+         ${escapeHtml(b.team_a)} <span style="color:var(--gold)">${b.real_a} - ${b.real_b}</span> ${escapeHtml(b.team_b)}</div>`
+    : `<div style="text-align:center; font-size:1.15rem; font-weight:700; margin:6px 0">
+         ${escapeHtml(b.team_a)} <span class="muted">vs</span> ${escapeHtml(b.team_b)}</div>`;
+
+  const tiers = `<div class="tiers">
+      <span>🎯 Marcador exacto <b>×${oe.toFixed(2)}</b></span>
+      <span>✅ Solo ganador <b>×${ow.toFixed(2)}</b></span>
+    </div>`;
+
+  let mine = "";
+  if(myW){
+    mine = `<div class="mypick">Tu pronóstico: <b>${myW.pred_a}-${myW.pred_b}</b> · ${fmt(myW.amount)} 🪙</div>`;
+  }
+
+  let action = "";
+  if(b.status==="open"){
+    action = `<button class="btn sm" style="width:100%; margin-top:8px" onclick="openMatchWager('${b.id}')">${myW?"✏️ Cambiar mi pronóstico":"🎯 Pronosticar marcador"}</button>`;
+  }
+
+  // listado de pronósticos
+  let list = "";
+  if(betWagers.length){
+    list = `<div class="wager-list">${betWagers.map(w=>{
+      const p = byId(w.player_id);
+      let res="";
+      if(b.status==="resolved"){
+        if(w.pred_a===b.real_a && w.pred_b===b.real_b) res = ` <b style="color:var(--gold)">🎯 +${fmt(w.amount*oe)}</b>`;
+        else if(Math.sign(w.pred_a-w.pred_b)===Math.sign(b.real_a-b.real_b)) res = ` <b style="color:var(--green)">✅ +${fmt(w.amount*ow)}</b>`;
+        else res = ` <b style="color:var(--red)">-${fmt(w.amount)}</b>`;
+      }
+      return `<div class="w"><span><b>${escapeHtml(p?p.name:"?")}</b> → ${w.pred_a}-${w.pred_b}</span><span>${fmt(w.amount)} 🪙${res}</span></div>`;
+    }).join("")}</div>`;
+  }
+
+  let resolveCtl = "";
+  if(b.status==="open"){
+    resolveCtl = `<div class="row" style="margin-top:12px; align-items:center">
+      <input id="ra-${b.id}" type="number" min="0" placeholder="0" style="text-align:center">
+      <span style="flex:none">-</span>
+      <input id="rb-${b.id}" type="number" min="0" placeholder="0" style="text-align:center">
+      <button class="btn gold sm" style="flex:none" onclick="resolveMatch('${b.id}')">🏁 Resultado</button>
+    </div>`;
+  }
+
+  return cardShell(b, score+tiers+mine+action+list+resolveCtl, "🆚 Partido");
+}
+
+/* ---- Apuesta libre ---- */
+function renderFreeCard(b){
+  const cat = CATEGORIES.find(c=>c.id===b.category);
+  const myW = wagers.find(w=>w.bet_id===b.id && w.player_id===myId);
+  const betWagers = wagers.filter(w=>w.bet_id===b.id);
+
+  const opts = b.options.map(o=>{
+    const isWin = b.status==="resolved" && b.winning_option_id===o.id;
+    const isSel = myW && myW.option_id===o.id;
+    const onOpt = betWagers.filter(w=>w.option_id===o.id).reduce((s,w)=>s+Number(w.amount),0);
+    const cls = ["opt", isWin?"win":"", isSel?"sel":""].join(" ").trim();
+    const action = b.status==="open" ? `onclick="openWager('${b.id}','${o.id}')"` : "";
+    return `<div class="${cls}" ${action}>
+      <div style="flex:1">
+        <div class="lab">${escapeHtml(o.label)} ${isWin?"✅":""} ${isSel?"· <span style='color:var(--green)'>tu apuesta</span>":""}</div>
+        <div class="pot">${onOpt>0?fmt(onOpt)+" 🪙 apostado":"sin apuestas"}</div>
+      </div>
+      <div class="od">${Number(o.odds).toFixed(2)}<small>cuota</small></div>
+    </div>`;
+  }).join("");
+
+  let wagersHtml = "";
+  if(betWagers.length){
+    wagersHtml = `<div class="wager-list">${
+      betWagers.map(w=>{
+        const p = byId(w.player_id); const o = b.options.find(x=>x.id===w.option_id);
+        let res = "";
+        if(b.status==="resolved" && o){
+          const won = w.option_id===b.winning_option_id;
+          res = won ? ` <b style="color:var(--green)">+${fmt(Number(w.amount)*Number(o.odds))}</b>`
+                    : ` <b style="color:var(--red)">-${fmt(w.amount)}</b>`;
+        }
+        return `<div class="w"><span><b>${escapeHtml(p?p.name:"?")}</b> → ${escapeHtml(o?o.label:"?")}</span><span>${fmt(w.amount)} 🪙${res}</span></div>`;
+      }).join("")
+    }</div>`;
+  }
+
+  let resolveCtl = "";
+  if(b.status==="open"){
+    const optionsSel = b.options.map(o=>`<option value="${o.id}">${escapeHtml(o.label)}</option>`).join("");
+    resolveCtl = `<div class="row" style="margin-top:12px">
+      <select id="rsel-${b.id}">${optionsSel}</select>
+      <button class="btn gold sm" style="flex:none" onclick="resolveBet('${b.id}')">🏁 Resolver</button>
+    </div>`;
+  }
+
+  return cardShell(b, opts+wagersHtml+resolveCtl, cat?cat.label:b.category);
+}
+
+function renderLeaderboard(){
+  const el = $("leaderboard");
+  if(players.length===0){ el.innerHTML = emptyState("📊","Sin jugadores aún",""); return; }
+  const sorted = [...players].sort((a,b)=>Number(b.balance)-Number(a.balance));
+  el.innerHTML = sorted.map((p,i)=>{
+    const open = openExposure(p.id);
+    return `<div class="lb">
+      <div class="pos">${i===0?"🥇":i===1?"🥈":i===2?"🥉":(i+1)}</div>
+      <div class="avatar" style="width:34px;height:34px;font-size:.85rem">${initials(p.name)}</div>
+      <div class="nm">${escapeHtml(p.name)}${p.id===myId?' <span class="small" style="color:var(--green)">(tú)</span>':''}<small>${open>0?fmt(open)+" 🪙 en juego":"sin apuestas abiertas"}</small></div>
+      <div class="mn">${fmt(p.balance)} 🪙</div>
+    </div>`;
+  }).join("");
+}
+function openExposure(playerId){
+  const openBetIds = new Set(bets.filter(b=>b.status==="open").map(b=>b.id));
+  return wagers.filter(w=>w.player_id===playerId && openBetIds.has(w.bet_id))
+               .reduce((s,w)=>s+Number(w.amount),0);
+}
+
+function renderPeople(){
+  $("infoPoolName").textContent = pool.name;
+  $("infoPoolCode").textContent = pool.code;
+  const el = $("peopleList");
+  el.innerHTML = players.length===0
+    ? `<p class="muted small">Nadie todavía.</p>`
+    : players.map(p=>`
+      <div class="ppl-item">
+        <div class="avatar" style="width:34px;height:34px;font-size:.85rem">${initials(p.name)}</div>
+        <div class="nm">${escapeHtml(p.name)}<small>${fmt(p.balance)} 🪙${p.id===myId?" · tú":""}</small></div>
+      </div>`).join("");
+}
+
+function renderCatPills(){
+  $("catPills").innerHTML = CATEGORIES.map(c=>
+    `<button class="${c.id===createCat?"on":""}" onclick="pickCat('${c.id}')">${c.label}</button>`).join("");
+}
+
+function emptyState(icon,title,sub){
+  return `<div class="empty"><span class="big">${icon}</span><b>${title}</b><br><span class="small">${sub}</span></div>`;
+}
+
+/* ============================================================
+   CREAR APUESTA
+   ============================================================ */
+function pickKind(kind){
+  createKind = kind;
+  document.querySelectorAll("#kindPills button").forEach(b=> b.classList.toggle("on", b.dataset.kind===kind));
+  $("matchFields").classList.toggle("hide", kind!=="match");
+  $("freeFields").classList.toggle("hide", kind!=="free");
+}
+function pickCat(id){
+  createCat = id; renderCatPills();
+  const cat = CATEGORIES.find(c=>c.id===id);
+  buildOptRows(cat.opts.length ? cat.opts.map(l=>({label:l,odds:""})) : [{label:"",odds:""},{label:"",odds:""}]);
+}
+function buildOptRows(rows){ $("optRows").innerHTML = rows.map(r=>optRowHtml(r.label,r.odds)).join(""); }
+function optRowHtml(label="",odds=""){
+  return `<div class="optrow">
+    <input class="olab" placeholder="Opción" value="${escapeHtml(label)}">
+    <input class="ood" type="number" step="0.01" min="1.01" placeholder="cuota" value="${odds}">
+    <button class="x" onclick="this.parentElement.remove()">✕</button>
+  </div>`;
+}
+function addOptRow(){ $("optRows").insertAdjacentHTML("beforeend", optRowHtml()); }
+
+async function createBet(){
+  if(!me()) return toast("No se ha identificado tu jugador", true);
+  let payload;
+
+  if(createKind==="match"){
+    const a = $("cTeamA").value.trim(), b = $("cTeamB").value.trim();
+    const oe = parseFloat($("cOddsExact").value), ow = parseFloat($("cOddsWinner").value);
+    if(!a || !b) return toast("Escribe los dos equipos", true);
+    if(!(oe>1) || !(ow>1)) return toast("Las cuotas deben ser mayores que 1", true);
+    if(oe<=ow) return toast("La cuota del marcador exacto debe ser mayor que la de solo ganador", true);
+    payload = {
+      pool_id:pool.id, creator_id:myId, kind:"match", category:"partido",
+      question:`${a} vs ${b}`, team_a:a, team_b:b, odds_exact:oe, odds_winner:ow,
+      options:[], status:"open"
+    };
+  } else {
+    const q = $("cQuestion").value.trim();
+    if(!q) return toast("Escribe la pregunta de la apuesta", true);
+    const rows = [...document.querySelectorAll("#optRows .optrow")];
+    const options = [];
+    for(const row of rows){
+      const label = row.querySelector(".olab").value.trim();
+      const odds = parseFloat(row.querySelector(".ood").value);
+      if(!label) continue;
+      if(!(odds>1)) return toast(`Pon una cuota válida (>1) en "${label}"`, true);
+      options.push({id:uid(), label, odds});
+    }
+    if(options.length<2) return toast("Necesitas al menos 2 opciones con cuota", true);
+    payload = { pool_id:pool.id, creator_id:myId, kind:"free", category:createCat, question:q, options, status:"open" };
+  }
+
+  const {error} = await sb.from("bets").insert(payload);
+  if(error) return toast("Error al publicar: "+error.message, true);
+
+  $("cQuestion").value=""; $("cTeamA").value=""; $("cTeamB").value=""; pickCat(createCat);
+  betFilter="open"; setFilterUI(); switchTab("bets");
+  toast("¡Apuesta publicada! 🎲");
+}
+
+/* ============================================================
+   APOSTAR / RESOLVER  (vía funciones atómicas en Supabase)
+   ============================================================ */
+async function openWager(betId, optId){
+  const u = me(); if(!u) return toast("No identificado", true);
+  const bet = bets.find(b=>b.id===betId); if(!bet || bet.status!=="open") return;
+  const opt = bet.options.find(o=>o.id===optId);
+  const existing = wagers.find(w=>w.bet_id===betId && w.player_id===myId);
+  if(existing){
+    const prev = bet.options.find(o=>o.id===existing.option_id);
+    if(!confirm(`Ya apostaste ${fmt(existing.amount)} 🪙 a "${prev?prev.label:"?"}". ¿Cambiar tu apuesta? (se te devuelve y apuestas de nuevo)`)) return;
+  }
+  const avail = Number(u.balance) + (existing?Number(existing.amount):0);
+  const raw = prompt(`Apostar a: "${opt.label}" (cuota ${Number(opt.odds).toFixed(2)})\nSi aciertas ganas lo apostado × cuota.\n\nSaldo disponible: ${fmt(avail)} 🪙\n¿Cuánto apuestas?`, "");
+  if(raw===null) return;
+  const amount = Math.floor(Number(raw));
+  if(!(amount>0)) return toast("Cantidad no válida", true);
+  if(amount>avail) return toast("No tienes saldo suficiente", true);
+
+  const {error} = await sb.rpc("place_wager",
+    {p_bet_id:betId, p_player_id:myId, p_option_id:optId, p_amount:amount});
+  if(error) return toast("Error: "+error.message, true);
+  await refresh();
+  toast(`Apostaste ${fmt(amount)} 🪙 · posible premio ${fmt(amount*Number(opt.odds))} 🪙`);
+}
+
+async function resolveBet(betId){
+  const bet = bets.find(b=>b.id===betId); if(!bet || bet.status!=="open") return;
+  const winId = $("rsel-"+betId).value;
+  const winOpt = bet.options.find(o=>o.id===winId);
+  if(!confirm(`Resolver "${bet.question}"\nGanadora: ${winOpt.label}\n\nSe pagarán los premios. No se puede deshacer.`)) return;
+  const {error} = await sb.rpc("resolve_bet", {p_bet_id:betId, p_winning_option_id:winId});
+  if(error) return toast("Error: "+error.message, true);
+  await refresh();
+  toast("Apuesta resuelta y premios pagados 🏆");
+}
+
+/* ---- Pronóstico de partido ---- */
+async function openMatchWager(betId){
+  const u = me(); if(!u) return toast("No identificado", true);
+  const bet = bets.find(b=>b.id===betId); if(!bet || bet.status!=="open") return;
+  const existing = wagers.find(w=>w.bet_id===betId && w.player_id===myId);
+
+  const rawScore = prompt(`Tu marcador para ${bet.team_a} vs ${bet.team_b}\n(ejemplo: 2-1)`,
+    existing ? `${existing.pred_a}-${existing.pred_b}` : "");
+  if(rawScore===null) return;
+  const m = rawScore.trim().match(/^(\d+)\s*[-:]\s*(\d+)$/);
+  if(!m) return toast("Marcador no válido. Usa el formato 2-1", true);
+  const pa = parseInt(m[1],10), pb = parseInt(m[2],10);
+
+  const avail = Number(u.balance) + (existing?Number(existing.amount):0);
+  const oe = Number(bet.odds_exact), ow = Number(bet.odds_winner);
+  const raw = prompt(`Marcador ${pa}-${pb} en ${bet.team_a} vs ${bet.team_b}\n\n🎯 Si aciertas el marcador exacto: ×${oe.toFixed(2)}\n✅ Si aciertas solo el ganador: ×${ow.toFixed(2)}\n\nSaldo disponible: ${fmt(avail)} 🪙\n¿Cuánto apuestas?`, "");
+  if(raw===null) return;
+  const amount = Math.floor(Number(raw));
+  if(!(amount>0)) return toast("Cantidad no válida", true);
+  if(amount>avail) return toast("No tienes saldo suficiente", true);
+
+  const {error} = await sb.rpc("place_match_wager",
+    {p_bet_id:betId, p_player_id:myId, p_pred_a:pa, p_pred_b:pb, p_amount:amount});
+  if(error) return toast("Error: "+error.message, true);
+  await refresh();
+  toast(`Pronóstico ${pa}-${pb} · ${fmt(amount)} 🪙 · exacto paga ${fmt(amount*oe)} 🪙`);
+}
+
+async function resolveMatch(betId){
+  const bet = bets.find(b=>b.id===betId); if(!bet || bet.status!=="open") return;
+  const ra = parseInt($("ra-"+betId).value,10), rb = parseInt($("rb-"+betId).value,10);
+  if(!(ra>=0) || !(rb>=0)) return toast("Mete el resultado real (ej. 2 y 1)", true);
+  if(!confirm(`Resultado de ${bet.team_a} vs ${bet.team_b}: ${ra}-${rb}\n\nSe pagarán los premios (exacto y solo-ganador). No se puede deshacer.`)) return;
+  const {error} = await sb.rpc("resolve_match", {p_bet_id:betId, p_real_a:ra, p_real_b:rb});
+  if(error) return toast("Error: "+error.message, true);
+  await refresh();
+  toast("Partido resuelto y premios pagados 🏆");
+}
+
+/* ============================================================
+   CONFIG (pantalla de ajuste de claves)
+   ============================================================ */
+function saveConfigFromUI(){
+  const url = $("cfgUrl").value.trim();
+  const key = $("cfgKey").value.trim();
+  if(!url || !key) return toast("Rellena los dos campos", true);
+  localStorage.setItem(LS.url, url);
+  localStorage.setItem(LS.key, key);
+  if(initClient()){ toast("Conectado ✔️"); boot(); }
+}
+
+/* ============================================================
+   NAV
+   ============================================================ */
+function switchTab(tab){
+  activeTab = tab;
+  ["bets","create","rank","people"].forEach(t=> $("tab-"+t).classList.toggle("hide", t!==tab));
+  document.querySelectorAll("#tabs button").forEach(b=> b.classList.toggle("active", b.dataset.tab===tab));
+  window.scrollTo({top:0,behavior:"smooth"});
+}
+function setFilterUI(){
+  document.querySelectorAll("#tab-bets .filterbar button").forEach(b=> b.classList.toggle("on", b.dataset.f===betFilter));
+}
+function copyCode(){
+  navigator.clipboard?.writeText(pool.code).then(()=>toast("Código copiado: "+pool.code));
+}
+
+/* ============================================================
+   EVENTOS
+   ============================================================ */
+function wire(){
+  $("cfgSave").addEventListener("click", saveConfigFromUI);
+
+  $("createPoolBtn").addEventListener("click", createPool);
+  $("joinPoolBtn").addEventListener("click", joinPoolFromInput);
+
+  $("ppCreateBtn").addEventListener("click", createPlayer);
+  $("ppNewName").addEventListener("keydown", e=>{ if(e.key==="Enter") createPlayer(); });
+  $("ppLeave").addEventListener("click", leavePool);
+
+  document.querySelectorAll("#tabs button").forEach(b=> b.addEventListener("click", ()=>switchTab(b.dataset.tab)));
+  document.querySelectorAll("#tab-bets .filterbar button").forEach(b=>
+    b.addEventListener("click", ()=>{ betFilter=b.dataset.f; setFilterUI(); renderBets(); }));
+
+  document.querySelectorAll("#kindPills button").forEach(b=> b.addEventListener("click", ()=>pickKind(b.dataset.kind)));
+  $("addOpt").addEventListener("click", addOptRow);
+  $("createBet").addEventListener("click", createBet);
+  $("leaveBtn").addEventListener("click", leavePool);
+  $("copyCodeBtn").addEventListener("click", copyCode);
+
+  // exponer para handlers inline
+  window.openWager=openWager; window.resolveBet=resolveBet;
+  window.openMatchWager=openMatchWager; window.resolveMatch=resolveMatch;
+  window.pickCat=pickCat; window.claimPlayer=claimPlayer;
+
+  // prefill config si ya existe
+  const {url,key} = getConfig();
+  $("cfgUrl").value = url; $("cfgKey").value = key;
+
+  pickKind(createKind);
+  pickCat(createCat);
+}
+
+document.addEventListener("DOMContentLoaded", ()=>{ wire(); boot(); });
+
+</script>
+
+<div style="position:fixed;left:0;right:0;top:0;z-index:80;background:#caa128;color:#04130b;text-align:center;font:700 .72rem/1 -apple-system,sans-serif;padding:5px">
+  MODO DEMO · datos de ejemplo en tu navegador · juegas como «Dani»
+</div>
+<button id="demoReset" style="position:fixed;right:10px;bottom:78px;z-index:80;border:1px solid #1e4030;background:#16331f;color:#eafff1;border-radius:999px;padding:8px 12px;font:700 .78rem -apple-system,sans-serif;cursor:pointer;box-shadow:0 6px 18px rgba(0,0,0,.4)">🔄 Reiniciar demo</button>
+<script>
+document.getElementById('demoReset').onclick=function(){
+  Object.keys(localStorage).filter(k=>k.indexOf('porra')===0).forEach(k=>localStorage.removeItem(k));
+  location.reload();
+};
+document.body.style.paddingTop='22px';
+</script>
+</body>
+</html>

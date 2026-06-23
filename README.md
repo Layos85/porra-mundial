@@ -55,8 +55,16 @@ window.PORRA_CONFIG = {
 4. Cualquiera puede **crear apuestas** y **apostar** a las de los demás.
 5. Quien quiera **resuelve** la apuesta cuando se sepa el resultado y se pagan los premios.
 
+## Probar sin instalar nada (demo)
+Abre [`demo.html`](demo.html) directamente en el navegador (móvil u ordenador):
+es una **demo offline** con datos de ejemplo y una base de datos simulada en tu
+navegador. Puedes pronosticar marcadores, apostar, crear apuestas y resolver
+partidos para ver cómo funciona. El botón «🔄 Reiniciar demo» lo deja de cero.
+No necesita Supabase ni conexión.
+
 ## Archivos
 - `index.html` — interfaz.
+- `demo.html` — versión de demostración offline (autocontenida).
 - `app.js` — lógica y conexión con Supabase (tiempo real).
 - `config.js` — tus claves de Supabase.
 - `supabase-schema.sql` — script de la base de datos.
