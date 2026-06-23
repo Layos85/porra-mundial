@@ -7,13 +7,10 @@
 <title>Porra del Mundial ⚽ — Apuestas entre amigos</title>
 <style>
   :root{
-    --bg:#0a1410; --bg2:#0d1f17;
-    --card:#102619; --card2:#16331f;
-    --txt:#eafff1; --muted:#8fb6a0;
-    --line:#1e4030;
-    --green:#22c55e; --green-d:#15803d;
-    --gold:#f5c542; --gold-d:#caa128;
-    --red:#f87171; --blue:#38bdf8; --purple:#c084fc; --orange:#fb923c;
+    --bg:#0a1410; --bg2:#0d1f17; --card:#102619; --card2:#16331f;
+    --txt:#eafff1; --muted:#8fb6a0; --line:#1e4030;
+    --green:#22c55e; --green-d:#15803d; --gold:#f5c542; --gold-d:#caa128;
+    --red:#f87171; --blue:#38bdf8;
     --shadow:0 10px 30px rgba(0,0,0,.35);
   }
   *{box-sizing:border-box; -webkit-tap-highlight-color:transparent}
@@ -28,88 +25,62 @@
   header h1{font-size:1.45rem; margin:6px 0 2px; font-weight:800; letter-spacing:.3px}
   header p{margin:0; color:var(--muted); font-size:.82rem}
 
-  .topbar{
-    display:flex; align-items:center; justify-content:space-between; gap:10px;
+  .topbar{display:flex; align-items:center; justify-content:space-between; gap:10px;
     background:var(--card); border:1px solid var(--line); border-radius:16px;
-    padding:10px 14px; margin-bottom:16px; box-shadow:var(--shadow);
-  }
+    padding:10px 14px; margin-bottom:14px; box-shadow:var(--shadow)}
   .topbar .who{display:flex; align-items:center; gap:10px; min-width:0}
-  .avatar{
-    width:38px; height:38px; border-radius:50%; flex:none;
-    display:grid; place-items:center; font-weight:800; color:#04130b;
-    background:linear-gradient(160deg,var(--gold),var(--gold-d));
-  }
-  .topbar select{
-    background:transparent; color:var(--txt); border:none; font-size:.95rem;
-    font-weight:700; max-width:150px; padding:2px 0;
-  }
+  .topbar .who .nm{font-weight:700; font-size:.95rem; line-height:1.1}
+  .topbar .who .nm small{display:block; color:var(--muted); font-weight:500; font-size:.66rem}
+  .avatar{width:38px; height:38px; border-radius:50%; flex:none; display:grid; place-items:center;
+    font-weight:800; color:#04130b; background:linear-gradient(160deg,var(--gold),var(--gold-d))}
   .topbar .bal{text-align:right}
   .topbar .bal b{font-size:1.05rem; color:var(--gold)}
-  .topbar .bal small{display:block; color:var(--muted); font-size:.68rem; text-transform:uppercase; letter-spacing:.5px}
+  .topbar .bal small{display:block; color:var(--muted); font-size:.66rem; text-transform:uppercase; letter-spacing:.5px}
 
-  .card{
-    background:var(--card); border:1px solid var(--line); border-radius:18px;
-    padding:18px; margin-bottom:16px; box-shadow:var(--shadow);
-  }
+  .card{background:var(--card); border:1px solid var(--line); border-radius:18px;
+    padding:18px; margin-bottom:16px; box-shadow:var(--shadow)}
   h2.section{font-size:1.05rem; margin:4px 0 14px; display:flex; align-items:center; gap:8px}
-  .muted{color:var(--muted)}
-  .small{font-size:.8rem}
+  .muted{color:var(--muted)} .small{font-size:.8rem}
+  a{color:var(--blue)}
 
   label{display:block; font-size:.78rem; color:var(--muted); margin:12px 0 5px; font-weight:600; text-transform:uppercase; letter-spacing:.4px}
-  input,select,textarea{
-    width:100%; background:var(--bg2); border:1px solid var(--line); color:var(--txt);
-    border-radius:11px; padding:11px 12px; font-size:.95rem; font-family:inherit;
-  }
+  input,select,textarea{width:100%; background:var(--bg2); border:1px solid var(--line); color:var(--txt);
+    border-radius:11px; padding:11px 12px; font-size:.95rem; font-family:inherit}
   input:focus,select:focus,textarea:focus{outline:none; border-color:var(--green)}
-  textarea{resize:vertical; min-height:48px}
 
-  .btn{
-    appearance:none; border:none; cursor:pointer; font-family:inherit; font-weight:700;
+  .btn{appearance:none; border:none; cursor:pointer; font-family:inherit; font-weight:700;
     border-radius:12px; padding:12px 16px; font-size:.95rem; color:#04130b;
     background:linear-gradient(160deg,var(--green),var(--green-d)); width:100%;
-    transition:transform .06s ease, filter .15s ease;
-  }
+    transition:transform .06s ease, filter .15s ease}
   .btn:active{transform:scale(.98)}
-  .btn:disabled{filter:grayscale(.6) brightness(.7); cursor:not-allowed}
   .btn.gold{background:linear-gradient(160deg,var(--gold),var(--gold-d))}
   .btn.ghost{background:transparent; border:1px solid var(--line); color:var(--txt)}
   .btn.danger{background:transparent; border:1px solid var(--red); color:var(--red)}
   .btn.sm{width:auto; padding:8px 12px; font-size:.82rem}
-  .row{display:flex; gap:8px}
-  .row > *{flex:1}
+  .row{display:flex; gap:8px} .row > *{flex:1}
 
-  .chip{
-    display:inline-flex; align-items:center; gap:5px; padding:3px 9px; border-radius:999px;
-    font-size:.7rem; font-weight:700; text-transform:uppercase; letter-spacing:.4px;
-  }
+  .chip{display:inline-flex; align-items:center; gap:5px; padding:3px 9px; border-radius:999px;
+    font-size:.7rem; font-weight:700; text-transform:uppercase; letter-spacing:.4px}
   .chip.cat{background:rgba(56,189,248,.14); color:var(--blue)}
   .chip.open{background:rgba(34,197,94,.16); color:var(--green)}
   .chip.resolved{background:rgba(245,197,66,.16); color:var(--gold)}
+  .codetag{display:inline-block; font-weight:800; letter-spacing:2px; background:var(--bg2);
+    border:1px dashed var(--line); border-radius:10px; padding:4px 10px; color:var(--gold)}
 
-  /* tabs */
-  .tabs{
-    position:fixed; left:0; right:0; bottom:0; z-index:40;
-    display:flex; background:rgba(10,20,16,.92); backdrop-filter:blur(10px);
-    border-top:1px solid var(--line);
-  }
-  .tabs button{
-    flex:1; background:none; border:none; color:var(--muted); cursor:pointer;
+  .tabs{position:fixed; left:0; right:0; bottom:0; z-index:40; display:flex;
+    background:rgba(10,20,16,.92); backdrop-filter:blur(10px); border-top:1px solid var(--line)}
+  .tabs button{flex:1; background:none; border:none; color:var(--muted); cursor:pointer;
     padding:10px 4px 14px; font-size:.66rem; font-weight:700; font-family:inherit;
-    display:flex; flex-direction:column; align-items:center; gap:3px;
-  }
+    display:flex; flex-direction:column; align-items:center; gap:3px}
   .tabs button .ic{font-size:1.25rem}
   .tabs button.active{color:var(--green)}
 
-  /* bet card */
   .bet{border:1px solid var(--line); border-radius:14px; padding:14px; margin-bottom:12px; background:var(--card2)}
   .bet .head{display:flex; justify-content:space-between; align-items:flex-start; gap:8px; margin-bottom:4px}
   .bet h3{font-size:1rem; margin:6px 0 2px; line-height:1.3}
   .bet .by{font-size:.74rem; color:var(--muted); margin-bottom:10px}
-  .opt{
-    display:flex; align-items:center; gap:10px; padding:10px 12px; border:1px solid var(--line);
-    border-radius:11px; margin-bottom:7px; background:var(--bg2); cursor:pointer;
-    transition:border-color .12s;
-  }
+  .opt{display:flex; align-items:center; gap:10px; padding:10px 12px; border:1px solid var(--line);
+    border-radius:11px; margin-bottom:7px; background:var(--bg2); cursor:pointer; transition:border-color .12s}
   .opt:hover{border-color:var(--green)}
   .opt.sel{border-color:var(--green); background:rgba(34,197,94,.10)}
   .opt.win{border-color:var(--gold); background:rgba(245,197,66,.12)}
@@ -130,34 +101,27 @@
   .lb .mn{font-weight:800; color:var(--gold); font-variant-numeric:tabular-nums}
 
   .optrow{display:flex; gap:8px; margin-bottom:8px; align-items:center}
-  .optrow input.olab{flex:3}
-  .optrow input.ood{flex:1; min-width:0}
+  .optrow input.olab{flex:3} .optrow input.ood{flex:1; min-width:0}
   .optrow .x{flex:none; width:38px; height:42px; border:1px solid var(--line); background:var(--bg2); color:var(--red); border-radius:10px; cursor:pointer; font-size:1rem}
 
   .pill-cats{display:flex; gap:7px; flex-wrap:wrap; margin-bottom:6px}
-  .pill-cats button{
-    border:1px solid var(--line); background:var(--bg2); color:var(--muted); cursor:pointer;
-    border-radius:999px; padding:7px 12px; font-size:.78rem; font-weight:700; font-family:inherit;
-  }
+  .pill-cats button{border:1px solid var(--line); background:var(--bg2); color:var(--muted); cursor:pointer;
+    border-radius:999px; padding:7px 12px; font-size:.78rem; font-weight:700; font-family:inherit}
   .pill-cats button.on{border-color:var(--green); color:var(--green); background:rgba(34,197,94,.10)}
 
   .empty{text-align:center; color:var(--muted); padding:30px 10px; font-size:.9rem}
   .empty .big{font-size:2.4rem; display:block; margin-bottom:8px}
 
-  .toast{
-    position:fixed; left:50%; bottom:84px; transform:translateX(-50%) translateY(20px);
+  .toast{position:fixed; left:50%; bottom:84px; transform:translateX(-50%) translateY(20px);
     background:var(--card2); border:1px solid var(--green); color:var(--txt);
     padding:11px 18px; border-radius:12px; font-size:.85rem; font-weight:600;
-    opacity:0; pointer-events:none; transition:.25s; z-index:60; box-shadow:var(--shadow); max-width:90%;
-  }
+    opacity:0; pointer-events:none; transition:.25s; z-index:60; box-shadow:var(--shadow); max-width:90%}
   .toast.show{opacity:1; transform:translateX(-50%) translateY(0)}
   .toast.bad{border-color:var(--red)}
 
   .filterbar{display:flex; gap:7px; margin-bottom:14px}
-  .filterbar button{
-    flex:1; border:1px solid var(--line); background:var(--bg2); color:var(--muted); cursor:pointer;
-    border-radius:10px; padding:8px; font-size:.8rem; font-weight:700; font-family:inherit;
-  }
+  .filterbar button{flex:1; border:1px solid var(--line); background:var(--bg2); color:var(--muted); cursor:pointer;
+    border-radius:10px; padding:8px; font-size:.8rem; font-weight:700; font-family:inherit}
   .filterbar button.on{border-color:var(--green); color:var(--green)}
 
   .hide{display:none !important}
@@ -166,501 +130,148 @@
   .ppl-item:last-child{border-bottom:none}
   .ppl-item .nm{flex:1; font-weight:600}
   .ppl-item .nm small{display:block; color:var(--muted); font-weight:500; font-size:.74rem}
+  ol.steps{padding-left:18px; line-height:1.6; font-size:.86rem} ol.steps li{margin-bottom:6px}
+  code{background:var(--bg2); padding:1px 6px; border-radius:6px; font-size:.82rem}
 </style>
 </head>
 <body>
 
-<div class="wrap">
-  <header>
-    <div class="logo">⚽🏆</div>
-    <h1 id="poolTitle">Porra del Mundial</h1>
-    <p>Dieciseisavos en adelante · dinero ficticio entre amigos</p>
-  </header>
+<!-- ====================== SETUP (config Supabase) ====================== -->
+<section id="screen-setup" class="wrap hide">
+  <header><div class="logo">⚽🏆</div><h1>Porra del Mundial</h1><p>Configuración inicial</p></header>
+  <div class="card">
+    <h2 class="section">🔌 Conectar con Supabase</h2>
+    <p class="muted small">Esta web necesita una base de datos gratuita de <a href="https://supabase.com" target="_blank" rel="noopener">Supabase</a> para que todos los amigos jueguen sincronizados. Solo hay que hacerlo una vez.</p>
+    <ol class="steps muted">
+      <li>Crea una cuenta y un proyecto gratis en supabase.com.</li>
+      <li>En <b>SQL Editor</b> pega el contenido de <code>supabase-schema.sql</code> y pulsa <b>Run</b>.</li>
+      <li>En <b>Project Settings → API</b> copia la <b>Project URL</b> y la clave <b>anon public</b>.</li>
+      <li>Pégalas aquí abajo (o, mejor, en el archivo <code>config.js</code> para que sea permanente).</li>
+    </ol>
+    <label>Project URL</label>
+    <input id="cfgUrl" placeholder="https://xxxx.supabase.co">
+    <label>anon public key</label>
+    <input id="cfgKey" placeholder="eyJhbGciOiJI...">
+    <button class="btn" id="cfgSave" style="margin-top:14px">Conectar</button>
+  </div>
+</section>
 
-  <div class="topbar" id="topbar">
-    <div class="who">
-      <div class="avatar" id="avatar">?</div>
-      <select id="userSel" title="¿Quién eres?"></select>
+<!-- ====================== LOBBY (crear / unirse) ====================== -->
+<section id="screen-lobby" class="wrap hide">
+  <header><div class="logo">⚽🏆</div><h1>Porra del Mundial</h1><p>Dieciseisavos en adelante · dinero ficticio entre amigos</p></header>
+  <div class="card">
+    <h2 class="section">🆕 Crear una porra</h2>
+    <label>Nombre de la porra</label>
+    <input id="lobbyName" placeholder="Porra del Mundial 2026">
+    <label>Tu nombre</label>
+    <input id="lobbyMyName" placeholder="Cómo te verán tus amigos">
+    <label>Saldo inicial por jugador 🪙</label>
+    <input id="lobbyStart" type="number" min="1" value="1000">
+    <button class="btn" id="createPoolBtn" style="margin-top:14px">Crear y obtener código</button>
+  </div>
+  <div class="card">
+    <h2 class="section">🔗 Unirse a una porra</h2>
+    <p class="muted small" style="margin-top:-8px">¿Un amigo ya creó la porra? Pide su código y entra.</p>
+    <label>Código de la porra</label>
+    <input id="joinCode" placeholder="Ej: K7M2P" style="text-transform:uppercase; letter-spacing:2px; font-weight:700">
+    <button class="btn ghost" id="joinPoolBtn" style="margin-top:14px">Entrar</button>
+  </div>
+</section>
+
+<!-- ====================== PICK PLAYER (identidad) ====================== -->
+<section id="screen-pickplayer" class="wrap hide">
+  <header><div class="logo">👋</div><h1 id="ppPoolName">Porra</h1>
+    <p>código <span class="codetag" id="ppPoolCode">—</span></p></header>
+  <div class="card">
+    <h2 class="section">¿Quién eres?</h2>
+    <p class="muted small" style="margin-top:-8px">Elige tu nombre si ya estás en la lista, o únete como nuevo jugador.</p>
+    <div id="ppList" style="margin:8px 0 4px"></div>
+    <hr class="sep">
+    <label>Unirme como nuevo jugador</label>
+    <div class="row">
+      <input id="ppNewName" placeholder="Tu nombre">
+      <button class="btn sm" id="ppCreateBtn" style="flex:none; padding:11px 16px">Unirme</button>
     </div>
-    <div class="bal">
-      <b id="userBal">0</b>
-      <small>tu saldo 🪙</small>
+    <button class="btn ghost sm" id="ppLeave" style="margin-top:14px">← Volver</button>
+  </div>
+</section>
+
+<!-- ====================== APP ====================== -->
+<section id="screen-app" class="hide">
+  <div class="wrap">
+    <header>
+      <div class="logo">⚽🏆</div>
+      <h1 id="poolTitle">Porra del Mundial</h1>
+      <p><span class="codetag" id="poolCodeTag">código —</span></p>
+    </header>
+
+    <div class="topbar">
+      <div class="who">
+        <div class="avatar" id="avatar">?</div>
+        <div class="nm" id="userName">—<small>tú</small></div>
+      </div>
+      <div class="bal"><b id="userBal">0</b><small>tu saldo 🪙</small></div>
     </div>
+
+    <section id="tab-bets">
+      <div class="filterbar">
+        <button data-f="open" class="on">🟢 Abiertas</button>
+        <button data-f="resolved">🏁 Resueltas</button>
+        <button data-f="mine">👤 Mías</button>
+      </div>
+      <div id="betList"></div>
+    </section>
+
+    <section id="tab-create" class="hide">
+      <div class="card">
+        <h2 class="section">➕ Inventar una apuesta</h2>
+        <p class="muted small" style="margin-top:-8px">Crea tu apuesta y ponle cuotas como una casa de apuestas. Tus amigos podrán apostar dinero ficticio. La cuota multiplica lo apostado si aciertan.</p>
+        <label>Tipo de apuesta</label>
+        <div class="pill-cats" id="catPills"></div>
+        <label>Pregunta / Evento</label>
+        <input id="cQuestion" placeholder="Ej: ¿Quién gana España vs Brasil?">
+        <label>Opciones y sus cuotas</label>
+        <div id="optRows"></div>
+        <button class="btn ghost sm" id="addOpt" style="margin-top:2px">+ Añadir opción</button>
+        <hr class="sep">
+        <button class="btn" id="createBet">🎲 Publicar apuesta</button>
+      </div>
+    </section>
+
+    <section id="tab-rank" class="hide">
+      <div class="card"><h2 class="section">🏆 Clasificación</h2><div id="leaderboard"></div></div>
+    </section>
+
+    <section id="tab-people" class="hide">
+      <div class="card">
+        <h2 class="section">📣 Invitar amigos</h2>
+        <p class="muted small" style="margin-top:-8px">Comparte este código y que entren desde <b>Unirse a una porra</b>:</p>
+        <div class="row" style="align-items:center">
+          <div style="flex:2"><span class="codetag" id="infoPoolCode" style="font-size:1.3rem">—</span></div>
+          <button class="btn gold sm" id="copyCodeBtn" style="flex:1">📋 Copiar</button>
+        </div>
+      </div>
+      <div class="card">
+        <h2 class="section">👥 Jugadores · <span id="infoPoolName" class="muted" style="font-weight:600"></span></h2>
+        <div id="peopleList"></div>
+        <hr class="sep">
+        <button class="btn ghost sm" id="leaveBtn">Salir / cambiar de porra</button>
+      </div>
+    </section>
   </div>
 
-  <!-- ============ TAB: APUESTAS ============ -->
-  <section id="tab-bets">
-    <div class="filterbar">
-      <button data-f="open" class="on">🟢 Abiertas</button>
-      <button data-f="resolved">🏁 Resueltas</button>
-      <button data-f="mine">👤 Mías</button>
-    </div>
-    <div id="betList"></div>
-  </section>
-
-  <!-- ============ TAB: CREAR ============ -->
-  <section id="tab-create" class="hide">
-    <div class="card">
-      <h2 class="section">➕ Inventar una apuesta</h2>
-      <p class="muted small" style="margin-top:-8px">Crea tu propia apuesta y ponle cuotas como una casa de apuestas. Tus amigos podrán apostar dinero ficticio. La cuota multiplica lo apostado si aciertan.</p>
-
-      <label>Tipo de apuesta</label>
-      <div class="pill-cats" id="catPills"></div>
-
-      <label>Pregunta / Evento</label>
-      <input id="cQuestion" placeholder="Ej: ¿Quién gana España vs Brasil?">
-
-      <label>Opciones y sus cuotas</label>
-      <div id="optRows"></div>
-      <button class="btn ghost sm" id="addOpt" style="margin-top:2px">+ Añadir opción</button>
-
-      <hr class="sep">
-      <button class="btn" id="createBet">🎲 Publicar apuesta</button>
-    </div>
-  </section>
-
-  <!-- ============ TAB: CLASIFICACIÓN ============ -->
-  <section id="tab-rank" class="hide">
-    <div class="card">
-      <h2 class="section">🏆 Clasificación</h2>
-      <div id="leaderboard"></div>
-    </div>
-  </section>
-
-  <!-- ============ TAB: AMIGOS / AJUSTES ============ -->
-  <section id="tab-people" class="hide">
-    <div class="card">
-      <h2 class="section">👥 Amigos</h2>
-      <div class="row">
-        <input id="newName" placeholder="Nombre del amigo">
-        <button class="btn sm" id="addPerson" style="flex:none; padding:11px 16px">Añadir</button>
-      </div>
-      <div id="peopleList" style="margin-top:12px"></div>
-    </div>
-
-    <div class="card">
-      <h2 class="section">⚙️ La porra</h2>
-      <label>Nombre de la porra</label>
-      <input id="poolName" placeholder="Porra del Mundial 2026">
-      <label>Saldo inicial por jugador 🪙</label>
-      <input id="startBal" type="number" min="1" value="1000">
-      <button class="btn ghost sm" id="saveSettings" style="margin-top:12px">Guardar ajustes</button>
-
-      <hr class="sep">
-      <p class="muted small">Comparte la porra: exporta los datos y pásaselos a tus amigos, o impórtalos para sincronizar.</p>
-      <div class="row">
-        <button class="btn ghost sm" id="exportBtn">⬇️ Exportar</button>
-        <button class="btn ghost sm" id="importBtn">⬆️ Importar</button>
-      </div>
-      <input type="file" id="importFile" accept="application/json" class="hide">
-
-      <hr class="sep">
-      <button class="btn danger sm" id="resetBtn">🗑️ Reiniciar todo</button>
-    </div>
-  </section>
-</div>
-
-<div class="tabs" id="tabs">
-  <button data-tab="bets" class="active"><span class="ic">🎲</span>Apuestas</button>
-  <button data-tab="create"><span class="ic">➕</span>Crear</button>
-  <button data-tab="rank"><span class="ic">🏆</span>Ranking</button>
-  <button data-tab="people"><span class="ic">👥</span>Amigos</button>
-</div>
+  <div class="tabs" id="tabs">
+    <button data-tab="bets" class="active"><span class="ic">🎲</span>Apuestas</button>
+    <button data-tab="create"><span class="ic">➕</span>Crear</button>
+    <button data-tab="rank"><span class="ic">🏆</span>Ranking</button>
+    <button data-tab="people"><span class="ic">👥</span>Amigos</button>
+  </div>
+</section>
 
 <div class="toast" id="toast"></div>
 
-<script>
-"use strict";
-/* ============================================================
-   Porra del Mundial — app sin servidor (datos en localStorage)
-   ============================================================ */
-
-const STORE_KEY = "porraMundial.v1";
-const CATEGORIES = [
-  {id:"resultado", label:"🥅 Resultado (1X2)", opts:["Gana local","Empate","Gana visitante"]},
-  {id:"marcador",  label:"🔢 Marcador exacto", opts:["1-0","2-1","0-0"]},
-  {id:"goleador",  label:"⚽ Goleador",         opts:[]},
-  {id:"sino",      label:"🔀 Sí / No",          opts:["Sí","No"]},
-  {id:"especial",  label:"✨ Especial",          opts:[]},
-];
-
-let DB = load();
-let activeTab = "bets";
-let betFilter = "open";
-let createCat = "resultado";
-
-/* ---------- persistencia ---------- */
-function load(){
-  try{
-    const raw = localStorage.getItem(STORE_KEY);
-    if(raw) return JSON.parse(raw);
-  }catch(e){}
-  return {
-    poolName:"Porra del Mundial 2026",
-    startingBalance:1000,
-    currentUserId:null,
-    participants:[],
-    bets:[]
-  };
-}
-function save(){ localStorage.setItem(STORE_KEY, JSON.stringify(DB)); }
-
-/* ---------- utilidades ---------- */
-const uid = () => Math.random().toString(36).slice(2,9);
-const fmt = n => Math.round(n).toLocaleString("es-ES");
-const byId = id => DB.participants.find(p=>p.id===id);
-const initials = name => (name||"?").trim().slice(0,2).toUpperCase();
-function toast(msg, bad=false){
-  const t = document.getElementById("toast");
-  t.textContent = msg; t.classList.toggle("bad", bad); t.classList.add("show");
-  clearTimeout(t._t); t._t = setTimeout(()=>t.classList.remove("show"), 2400);
-}
-function me(){ return byId(DB.currentUserId); }
-
-/* ============================================================
-   RENDER
-   ============================================================ */
-function render(){
-  document.getElementById("poolTitle").textContent = DB.poolName || "Porra del Mundial";
-  renderTopbar();
-  renderBets();
-  renderLeaderboard();
-  renderPeople();
-  renderSettingsForm();
-  renderCatPills();
-}
-
-function renderTopbar(){
-  const sel = document.getElementById("userSel");
-  if(DB.participants.length===0){
-    sel.innerHTML = `<option>— añade amigos —</option>`;
-    document.getElementById("avatar").textContent = "?";
-    document.getElementById("userBal").textContent = "0";
-    return;
-  }
-  if(!DB.currentUserId || !byId(DB.currentUserId)) DB.currentUserId = DB.participants[0].id;
-  sel.innerHTML = DB.participants.map(p=>
-    `<option value="${p.id}" ${p.id===DB.currentUserId?"selected":""}>${escapeHtml(p.name)}</option>`).join("");
-  const u = me();
-  document.getElementById("avatar").textContent = initials(u.name);
-  document.getElementById("userBal").textContent = fmt(u.balance);
-}
-
-function renderBets(){
-  const list = document.getElementById("betList");
-  let bets = [...DB.bets].reverse();
-  if(betFilter==="open")     bets = bets.filter(b=>b.status==="open");
-  if(betFilter==="resolved") bets = bets.filter(b=>b.status==="resolved");
-  if(betFilter==="mine")     bets = bets.filter(b=>b.creatorId===DB.currentUserId);
-
-  if(DB.participants.length===0){
-    list.innerHTML = emptyState("👥","Primero añade a tus amigos","Ve a la pestaña <b>Amigos</b> para empezar la porra.");
-    return;
-  }
-  if(bets.length===0){
-    list.innerHTML = emptyState("🎲","No hay apuestas aquí","Crea la primera en la pestaña <b>Crear</b>.");
-    return;
-  }
-  list.innerHTML = bets.map(renderBetCard).join("");
-}
-
-function renderBetCard(b){
-  const creator = byId(b.creatorId);
-  const cat = CATEGORIES.find(c=>c.id===b.category);
-  const myWager = b.wagers.find(w=>w.userId===DB.currentUserId);
-  const totalPot = b.wagers.reduce((s,w)=>s+w.amount,0);
-
-  const opts = b.options.map(o=>{
-    const isWin = b.status==="resolved" && b.winningOptionId===o.id;
-    const isSel = myWager && myWager.optionId===o.id;
-    const onOpt = b.wagers.filter(w=>w.optionId===o.id).reduce((s,w)=>s+w.amount,0);
-    const cls = ["opt", isWin?"win":"", isSel?"sel":""].join(" ").trim();
-    const action = b.status==="open" ? `onclick="openWager('${b.id}','${o.id}')"` : "";
-    return `<div class="${cls}" ${action}>
-      <div style="flex:1">
-        <div class="lab">${escapeHtml(o.label)} ${isWin?"✅":""} ${isSel?"· <span style='color:var(--green)'>tu apuesta</span>":""}</div>
-        <div class="pot">${onOpt>0?fmt(onOpt)+" 🪙 apostado":"sin apuestas"}</div>
-      </div>
-      <div class="od">${o.odds.toFixed(2)}<small>cuota</small></div>
-    </div>`;
-  }).join("");
-
-  let wagersHtml = "";
-  if(b.wagers.length){
-    wagersHtml = `<div class="wager-list">${
-      b.wagers.map(w=>{
-        const p = byId(w.userId); const o = b.options.find(x=>x.id===w.optionId);
-        let res = "";
-        if(b.status==="resolved" && o){
-          const won = w.optionId===b.winningOptionId;
-          res = won ? ` <b style="color:var(--green)">+${fmt(w.amount*o.odds)}</b>` : ` <b style="color:var(--red)">-${fmt(w.amount)}</b>`;
-        }
-        return `<div class="w"><span><b>${escapeHtml(p?p.name:"?")}</b> → ${escapeHtml(o?o.label:"?")}</span><span>${fmt(w.amount)} 🪙${res}</span></div>`;
-      }).join("")
-    }</div>`;
-  }
-
-  let resolveCtl = "";
-  if(b.status==="open"){
-    const optionsSel = b.options.map(o=>`<option value="${o.id}">${escapeHtml(o.label)}</option>`).join("");
-    resolveCtl = `<div class="row" style="margin-top:12px">
-      <select id="rsel-${b.id}">${optionsSel}</select>
-      <button class="btn gold sm" style="flex:none" onclick="resolveBet('${b.id}')">🏁 Resolver</button>
-    </div>`;
-  }
-
-  return `<div class="bet">
-    <div class="head">
-      <span class="chip cat">${cat?cat.label:b.category}</span>
-      <span class="chip ${b.status}">${b.status==="open"?"Abierta":"Resuelta"}</span>
-    </div>
-    <h3>${escapeHtml(b.question)}</h3>
-    <div class="by">Creada por <b>${escapeHtml(creator?creator.name:"?")}</b> · bote ${fmt(totalPot)} 🪙</div>
-    ${opts}
-    ${wagersHtml}
-    ${resolveCtl}
-  </div>`;
-}
-
-function renderLeaderboard(){
-  const el = document.getElementById("leaderboard");
-  if(DB.participants.length===0){ el.innerHTML = emptyState("📊","Sin jugadores aún","Añade amigos para ver la clasificación."); return; }
-  const sorted = [...DB.participants].sort((a,b)=>b.balance-a.balance);
-  el.innerHTML = sorted.map((p,i)=>{
-    const open = openExposure(p.id);
-    return `<div class="lb">
-      <div class="pos">${i===0?"🥇":i===1?"🥈":i===2?"🥉":(i+1)}</div>
-      <div class="avatar" style="width:34px;height:34px;font-size:.85rem">${initials(p.name)}</div>
-      <div class="nm">${escapeHtml(p.name)}<small>${open>0?fmt(open)+" 🪙 en juego":"sin apuestas abiertas"}</small></div>
-      <div class="mn">${fmt(p.balance)} 🪙</div>
-    </div>`;
-  }).join("");
-}
-function openExposure(userId){
-  let s=0;
-  DB.bets.filter(b=>b.status==="open").forEach(b=>b.wagers.filter(w=>w.userId===userId).forEach(w=>s+=w.amount));
-  return s;
-}
-
-function renderPeople(){
-  const el = document.getElementById("peopleList");
-  if(DB.participants.length===0){ el.innerHTML = `<p class="muted small">Aún no hay nadie. Añade al primer amigo arriba.</p>`; return; }
-  el.innerHTML = DB.participants.map(p=>`
-    <div class="ppl-item">
-      <div class="avatar" style="width:34px;height:34px;font-size:.85rem">${initials(p.name)}</div>
-      <div class="nm">${escapeHtml(p.name)}<small>${fmt(p.balance)} 🪙 · ${p.id===DB.currentUserId?"tú":"amigo"}</small></div>
-      <button class="btn ghost sm" onclick="setUser('${p.id}')">Soy yo</button>
-      <button class="btn danger sm" onclick="removePerson('${p.id}')">✕</button>
-    </div>`).join("");
-}
-
-function renderSettingsForm(){
-  document.getElementById("poolName").value = DB.poolName || "";
-  document.getElementById("startBal").value = DB.startingBalance || 1000;
-}
-
-function renderCatPills(){
-  document.getElementById("catPills").innerHTML = CATEGORIES.map(c=>
-    `<button class="${c.id===createCat?"on":""}" onclick="pickCat('${c.id}')">${c.label}</button>`).join("");
-}
-
-function emptyState(icon,title,sub){
-  return `<div class="empty"><span class="big">${icon}</span><b>${title}</b><br><span class="small">${sub}</span></div>`;
-}
-function escapeHtml(s){ return String(s).replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c])); }
-
-/* ============================================================
-   ACCIONES — amigos
-   ============================================================ */
-function addPerson(){
-  const inp = document.getElementById("newName");
-  const name = inp.value.trim();
-  if(!name) return toast("Escribe un nombre", true);
-  DB.participants.push({id:uid(), name, balance:Number(DB.startingBalance)||1000});
-  if(!DB.currentUserId) DB.currentUserId = DB.participants[DB.participants.length-1].id;
-  inp.value=""; save(); render(); toast(`${name} se une a la porra 🎉`);
-}
-function removePerson(id){
-  const p = byId(id); if(!p) return;
-  if(!confirm(`¿Quitar a ${p.name}? Se borrarán sus apuestas.`)) return;
-  DB.participants = DB.participants.filter(x=>x.id!==id);
-  DB.bets = DB.bets.filter(b=>b.creatorId!==id);
-  DB.bets.forEach(b=>b.wagers = b.wagers.filter(w=>w.userId!==id));
-  if(DB.currentUserId===id) DB.currentUserId = DB.participants[0]?.id || null;
-  save(); render();
-}
-function setUser(id){ DB.currentUserId = id; save(); render(); toast("Ahora juegas como "+byId(id).name); }
-
-/* ============================================================
-   ACCIONES — crear apuesta
-   ============================================================ */
-function pickCat(id){
-  createCat = id;
-  renderCatPills();
-  const cat = CATEGORIES.find(c=>c.id===id);
-  buildOptRows(cat.opts.length ? cat.opts.map(l=>({label:l,odds:""})) : [{label:"",odds:""},{label:"",odds:""}]);
-}
-function buildOptRows(rows){
-  document.getElementById("optRows").innerHTML = rows.map(r=>optRowHtml(r.label,r.odds)).join("");
-}
-function optRowHtml(label="",odds=""){
-  return `<div class="optrow">
-    <input class="olab" placeholder="Opción" value="${escapeHtml(label)}">
-    <input class="ood" type="number" step="0.01" min="1.01" placeholder="cuota" value="${odds}">
-    <button class="x" onclick="this.parentElement.remove()">✕</button>
-  </div>`;
-}
-function addOptRow(){ document.getElementById("optRows").insertAdjacentHTML("beforeend", optRowHtml()); }
-
-function createBet(){
-  if(!me()) return toast("Selecciona quién eres primero", true);
-  const q = document.getElementById("cQuestion").value.trim();
-  if(!q) return toast("Escribe la pregunta de la apuesta", true);
-  const rows = [...document.querySelectorAll("#optRows .optrow")];
-  const options = [];
-  for(const row of rows){
-    const label = row.querySelector(".olab").value.trim();
-    const odds = parseFloat(row.querySelector(".ood").value);
-    if(!label) continue;
-    if(!(odds>1)) return toast(`Pon una cuota válida (>1) en "${label}"`, true);
-    options.push({id:uid(), label, odds});
-  }
-  if(options.length<2) return toast("Necesitas al menos 2 opciones con cuota", true);
-
-  DB.bets.push({
-    id:uid(), creatorId:DB.currentUserId, category:createCat, question:q,
-    createdAt:Date.now(), status:"open", winningOptionId:null, options, wagers:[]
-  });
-  save();
-  document.getElementById("cQuestion").value="";
-  pickCat(createCat);
-  betFilter="open"; setFilterUI();
-  switchTab("bets");
-  toast("¡Apuesta publicada! 🎲");
-}
-
-/* ============================================================
-   ACCIONES — apostar
-   ============================================================ */
-function openWager(betId, optId){
-  const u = me(); if(!u) return toast("Selecciona quién eres", true);
-  const bet = DB.bets.find(b=>b.id===betId);
-  const opt = bet.options.find(o=>o.id===optId);
-  if(!bet || bet.status!=="open") return;
-
-  const existing = bet.wagers.find(w=>w.userId===DB.currentUserId);
-  if(existing){
-    const prevLabel = bet.options.find(o=>o.id===existing.optionId).label;
-    if(!confirm(`Ya apostaste ${fmt(existing.amount)} 🪙 a "${prevLabel}". ¿Cambiar tu apuesta? (se te devuelve y apuestas de nuevo)`)) return;
-  }
-  const refund = existing ? existing.amount : 0;
-  const avail = u.balance + refund;
-  const raw = prompt(`Apostar a: "${opt.label}" (cuota ${opt.odds.toFixed(2)})\nSi aciertas ganas lo apostado × cuota.\n\nSaldo disponible: ${fmt(avail)} 🪙\n¿Cuánto apuestas?`, "");
-  if(raw===null) return;
-  const amount = Math.floor(Number(raw));
-  if(!(amount>0)) return toast("Cantidad no válida", true);
-  if(amount>avail) return toast("No tienes saldo suficiente", true);
-
-  if(existing){
-    u.balance += existing.amount;
-    bet.wagers = bet.wagers.filter(w=>w!==existing);
-  }
-  u.balance -= amount;
-  bet.wagers.push({id:uid(), userId:DB.currentUserId, optionId:optId, amount, createdAt:Date.now()});
-  save(); render();
-  toast(`Apostaste ${fmt(amount)} 🪙 · posible premio ${fmt(amount*opt.odds)} 🪙`);
-}
-
-function resolveBet(betId){
-  const bet = DB.bets.find(b=>b.id===betId);
-  if(!bet || bet.status!=="open") return;
-  const sel = document.getElementById("rsel-"+betId);
-  const winId = sel.value;
-  const winOpt = bet.options.find(o=>o.id===winId);
-  if(!confirm(`Resolver "${bet.question}"\nGanadora: ${winOpt.label}\n\nSe pagarán los premios. Esto no se puede deshacer.`)) return;
-
-  bet.wagers.forEach(w=>{
-    if(w.optionId===winId){
-      const u = byId(w.userId); const o = bet.options.find(x=>x.id===w.optionId);
-      if(u && o) u.balance += w.amount * o.odds;
-    }
-  });
-  bet.status="resolved"; bet.winningOptionId=winId; bet.resolvedAt=Date.now();
-  save(); render();
-  toast("Apuesta resuelta y premios pagados 🏆");
-}
-
-/* ============================================================
-   AJUSTES / DATOS
-   ============================================================ */
-function saveSettings(){
-  DB.poolName = document.getElementById("poolName").value.trim() || "Porra del Mundial 2026";
-  DB.startingBalance = Math.max(1, Math.floor(Number(document.getElementById("startBal").value)||1000));
-  save(); render(); toast("Ajustes guardados ✔️");
-}
-function exportData(){
-  const blob = new Blob([JSON.stringify(DB,null,2)], {type:"application/json"});
-  const a = document.createElement("a");
-  a.href = URL.createObjectURL(blob);
-  a.download = "porra-mundial.json";
-  a.click(); URL.revokeObjectURL(a.href);
-  toast("Datos exportados ⬇️");
-}
-function importData(file){
-  const r = new FileReader();
-  r.onload = () => {
-    try{
-      const data = JSON.parse(r.result);
-      if(!Array.isArray(data.participants) || !Array.isArray(data.bets)) throw new Error("formato");
-      DB = data; save(); render(); toast("Datos importados ✔️");
-    }catch(e){ toast("Archivo no válido", true); }
-  };
-  r.readAsText(file);
-}
-function resetAll(){
-  if(!confirm("¿Borrar TODA la porra (amigos, apuestas y saldos)?")) return;
-  localStorage.removeItem(STORE_KEY);
-  DB = load(); save(); render(); pickCat(createCat); toast("Todo reiniciado");
-}
-
-/* ============================================================
-   NAV / EVENTOS
-   ============================================================ */
-function switchTab(tab){
-  activeTab = tab;
-  ["bets","create","rank","people"].forEach(t=>
-    document.getElementById("tab-"+t).classList.toggle("hide", t!==tab));
-  document.querySelectorAll("#tabs button").forEach(b=>
-    b.classList.toggle("active", b.dataset.tab===tab));
-  window.scrollTo({top:0,behavior:"smooth"});
-}
-function setFilterUI(){
-  document.querySelectorAll("#tab-bets .filterbar button").forEach(b=>
-    b.classList.toggle("on", b.dataset.f===betFilter));
-}
-
-document.querySelectorAll("#tabs button").forEach(b=>
-  b.addEventListener("click", ()=>switchTab(b.dataset.tab)));
-document.querySelectorAll("#tab-bets .filterbar button").forEach(b=>
-  b.addEventListener("click", ()=>{ betFilter=b.dataset.f; setFilterUI(); renderBets(); }));
-
-document.getElementById("userSel").addEventListener("change", e=>{ DB.currentUserId=e.target.value; save(); render(); });
-document.getElementById("addPerson").addEventListener("click", addPerson);
-document.getElementById("newName").addEventListener("keydown", e=>{ if(e.key==="Enter") addPerson(); });
-document.getElementById("addOpt").addEventListener("click", addOptRow);
-document.getElementById("createBet").addEventListener("click", createBet);
-document.getElementById("saveSettings").addEventListener("click", saveSettings);
-document.getElementById("exportBtn").addEventListener("click", exportData);
-document.getElementById("importBtn").addEventListener("click", ()=>document.getElementById("importFile").click());
-document.getElementById("importFile").addEventListener("change", e=>{ if(e.target.files[0]) importData(e.target.files[0]); });
-document.getElementById("resetBtn").addEventListener("click", resetAll);
-
-window.openWager=openWager; window.resolveBet=resolveBet; window.setUser=setUser;
-window.removePerson=removePerson; window.pickCat=pickCat;
-
-/* init */
-pickCat(createCat);
-render();
-</script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="config.js"></script>
+<script src="app.js"></script>
 </body>
 </html>
