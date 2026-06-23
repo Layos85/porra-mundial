@@ -308,7 +308,7 @@
   const SEED={"pools":[{"id":"p1","code":"DEMO1","name":"Porra de la peña (DEMO)","starting_balance":1000}],"players":[{"id":"pl1","pool_id":"p1","name":"Dani","balance":1530},{"id":"pl2","pool_id":"p1","name":"Lucía","balance":932},{"id":"pl3","pool_id":"p1","name":"Marco","balance":820},{"id":"pl4","pool_id":"p1","name":"Sara","balance":1000}],"bets":[{"id":"b1","pool_id":"p1","creator_id":"pl1","kind":"match","category":"partido","question":"España vs Brasil","team_a":"España","team_b":"Brasil","odds_exact":5,"odds_winner":1.8,"status":"open","options":[],"created_at":"2026-06-23T10:00:00Z"},{"id":"b3","pool_id":"p1","creator_id":"pl3","kind":"free","category":"goleador","question":"¿Quién marca el primer gol en España-Brasil?","options":[{"id":"o1","label":"Lamine Yamal","odds":3},{"id":"o2","label":"Vinícius Jr","odds":3.5},{"id":"o3","label":"Nadie (0-0 al descanso)","odds":6}],"status":"open","created_at":"2026-06-23T09:00:00Z"},{"id":"b2","pool_id":"p1","creator_id":"pl2","kind":"match","category":"partido","question":"Francia vs Argentina","team_a":"Francia","team_b":"Argentina","odds_exact":6,"odds_winner":1.9,"status":"resolved","real_a":3,"real_b":1,"options":[],"created_at":"2026-06-22T10:00:00Z"},{"id":"b4","pool_id":"p1","creator_id":"pl1","kind":"free","category":"sino","question":"¿Habrá prórroga en Francia-Argentina?","options":[{"id":"s1","label":"Sí","odds":2.2},{"id":"s2","label":"No","odds":1.6}],"status":"resolved","winning_option_id":"s2","created_at":"2026-06-22T09:00:00Z"}],"wagers":[{"id":"w1","bet_id":"b1","pool_id":"p1","player_id":"pl2","pred_a":2,"pred_b":1,"amount":100},{"id":"w2","bet_id":"b1","pool_id":"p1","player_id":"pl3","pred_a":1,"pred_b":0,"amount":50},{"id":"w3","bet_id":"b2","pool_id":"p1","player_id":"pl1","pred_a":3,"pred_b":1,"amount":100},{"id":"w4","bet_id":"b2","pool_id":"p1","player_id":"pl2","pred_a":2,"pred_b":0,"amount":80},{"id":"w5","bet_id":"b2","pool_id":"p1","player_id":"pl3","pred_a":1,"pred_b":2,"amount":60},{"id":"w6","bet_id":"b3","pool_id":"p1","player_id":"pl3","option_id":"o1","amount":70},{"id":"w7","bet_id":"b4","pool_id":"p1","player_id":"pl1","option_id":"s2","amount":50},{"id":"w8","bet_id":"b4","pool_id":"p1","player_id":"pl2","option_id":"s1","amount":40}]};
   function loadDB(){ try{const r=localStorage.getItem(KEY); if(r) return JSON.parse(r);}catch(e){} return JSON.parse(JSON.stringify(SEED)); }
   let DB=loadDB();
-  const persist=()=>localStorage.setItem(KEY,JSON.stringify(DB));
+  const persist=()=>{ try{ localStorage.setItem(KEY,JSON.stringify(DB)); }catch(e){} };
   const rid=()=>'x'+Math.random().toString(36).slice(2,10);
   const P=id=>DB.players.find(p=>p.id===id);
   const Bt=id=>DB.bets.find(b=>b.id===id);
@@ -386,9 +386,16 @@
 
   window.PORRA_CONFIG={SUPABASE_URL:'demo',SUPABASE_ANON_KEY:'demo'};
   window.supabase={createClient:()=>({from:tableApi,rpc,channel:()=>({on(){return this;},subscribe(){return this;}}),removeChannel:()=>{}})};
-  if(!localStorage.getItem('porra.poolCode')){
-    localStorage.setItem('porra.poolCode',DB.pools[0].code);
-    localStorage.setItem('porra.player.'+DB.pools[0].code,DB.players[0].id);
+
+  /* Sembrar la sesión (entrar directo como Dani). Si localStorage está
+     bloqueado (archivo local/móvil), usar la memoria compartida con la app. */
+  const mem=(window.__porraMem=window.__porraMem||{});
+  let lsOK=true; try{ localStorage.setItem('__porra_t','1'); localStorage.removeItem('__porra_t'); }catch(e){ lsOK=false; }
+  const put=(k,v)=>{ if(lsOK) localStorage.setItem(k,v); else mem[k]=v; };
+  const got=k=> lsOK ? localStorage.getItem(k) : (k in mem?mem[k]:null);
+  if(!got('porra.poolCode')){
+    put('porra.poolCode',DB.pools[0].code);
+    put('porra.player.'+DB.pools[0].code,DB.players[0].id);
   }
 })();
 </script>
@@ -420,6 +427,17 @@ let myId = null;               // id de jugador en este dispositivo
 let channel = null;
 let activeTab = "bets", betFilter = "open", createCat = "resultado", createKind = "match";
 
+/* ---------- almacenamiento resistente (localStorage puede estar bloqueado
+   al abrir el archivo en local o en modo privado en algunos móviles) -------- */
+const mem = (window.__porraMem = window.__porraMem || {});
+let LS_OK = true;
+try{ localStorage.setItem("__porra_t","1"); localStorage.removeItem("__porra_t"); }catch(e){ LS_OK = false; }
+const store = {
+  get: k => LS_OK ? localStorage.getItem(k) : (k in mem ? mem[k] : null),
+  set: (k,v) => { if(LS_OK) localStorage.setItem(k,v); else mem[k] = String(v); },
+  del: k => { if(LS_OK) localStorage.removeItem(k); else delete mem[k]; },
+};
+
 /* ---------- utilidades ---------- */
 const $  = id => document.getElementById(id);
 const uid = () => Math.random().toString(36).slice(2,9);
@@ -441,8 +459,8 @@ function show(screen){
    CONFIG / CLIENTE
    ============================================================ */
 function getConfig(){
-  const url = localStorage.getItem(LS.url) || (window.PORRA_CONFIG && window.PORRA_CONFIG.SUPABASE_URL) || "";
-  const key = localStorage.getItem(LS.key) || (window.PORRA_CONFIG && window.PORRA_CONFIG.SUPABASE_ANON_KEY) || "";
+  const url = store.get(LS.url) || (window.PORRA_CONFIG && window.PORRA_CONFIG.SUPABASE_URL) || "";
+  const key = store.get(LS.key) || (window.PORRA_CONFIG && window.PORRA_CONFIG.SUPABASE_ANON_KEY) || "";
   return {url:url.trim(), key:key.trim()};
 }
 function initClient(){
@@ -458,7 +476,7 @@ function initClient(){
    ============================================================ */
 async function boot(){
   if(!initClient()){ show("setup"); return; }
-  const code = localStorage.getItem(LS.pool);
+  const code = store.get(LS.pool);
   if(code){
     const ok = await enterPool(code, /*silent*/true);
     if(ok) return;
@@ -497,8 +515,8 @@ async function createPool(){
   if(e2) return toast("Error al crear tu jugador: "+e2.message, true);
 
   myId = player.id;
-  localStorage.setItem(LS.pool, pool.code);
-  localStorage.setItem(LS.player(pool.code), myId);
+  store.set(LS.pool, pool.code);
+  store.set(LS.player(pool.code), myId);
   await afterEnter();
   toast(`Porra creada · código ${pool.code} 🎉`);
 }
@@ -515,8 +533,8 @@ async function enterPool(code, silent=false){
   if(error){ if(!silent) toast("Error: "+error.message, true); return false; }
   if(!data){ if(!silent) toast("No existe ninguna porra con ese código", true); return false; }
   pool = data;
-  localStorage.setItem(LS.pool, pool.code);
-  myId = localStorage.getItem(LS.player(pool.code)) || null;
+  store.set(LS.pool, pool.code);
+  myId = store.get(LS.player(pool.code)) || null;
   await afterEnter();
   return true;
 }
@@ -524,7 +542,7 @@ async function enterPool(code, silent=false){
 async function afterEnter(){
   await refresh();
   // si el jugador guardado ya no existe, pedir identidad
-  if(myId && !byId(myId)){ myId = null; localStorage.removeItem(LS.player(pool.code)); }
+  if(myId && !byId(myId)){ myId = null; store.del(LS.player(pool.code)); }
   subscribe();
   if(!myId){ renderPickPlayer(); show("pickplayer"); }
   else { renderApp(); show("app"); }
@@ -532,7 +550,7 @@ async function afterEnter(){
 
 function leavePool(){
   if(channel){ sb.removeChannel(channel); channel=null; }
-  localStorage.removeItem(LS.pool);
+  store.del(LS.pool);
   pool=null; myId=null; players=[]; bets=[]; wagers=[];
   show("lobby");
   $("joinCode").value=""; $("lobbyName").value=""; $("lobbyMyName").value="";
@@ -585,7 +603,7 @@ function renderPickPlayer(){
   }
 }
 async function claimPlayer(id){
-  myId = id; localStorage.setItem(LS.player(pool.code), id);
+  myId = id; store.set(LS.player(pool.code), id);
   renderApp(); show("app"); toast("Hola de nuevo, "+byId(id).name+" 👋");
 }
 async function createPlayer(){
@@ -594,7 +612,7 @@ async function createPlayer(){
   const {data,error} = await sb.from("players")
     .insert({pool_id:pool.id, name, balance:pool.starting_balance}).select().single();
   if(error) return toast("Error: "+error.message, true);
-  myId = data.id; localStorage.setItem(LS.player(pool.code), myId);
+  myId = data.id; store.set(LS.player(pool.code), myId);
   await refresh(); renderApp(); show("app");
   toast(`¡Bienvenido a la porra, ${name}! 🎉`);
 }
@@ -943,8 +961,8 @@ function saveConfigFromUI(){
   const url = $("cfgUrl").value.trim();
   const key = $("cfgKey").value.trim();
   if(!url || !key) return toast("Rellena los dos campos", true);
-  localStorage.setItem(LS.url, url);
-  localStorage.setItem(LS.key, key);
+  store.set(LS.url, url);
+  store.set(LS.key, key);
   if(initClient()){ toast("Conectado ✔️"); boot(); }
 }
 
@@ -1010,7 +1028,8 @@ document.addEventListener("DOMContentLoaded", ()=>{ wire(); boot(); });
 <button id="demoReset" style="position:fixed;right:10px;bottom:78px;z-index:80;border:1px solid #1e4030;background:#16331f;color:#eafff1;border-radius:999px;padding:8px 12px;font:700 .78rem -apple-system,sans-serif;cursor:pointer;box-shadow:0 6px 18px rgba(0,0,0,.4)">🔄 Reiniciar demo</button>
 <script>
 document.getElementById('demoReset').onclick=function(){
-  Object.keys(localStorage).filter(k=>k.indexOf('porra')===0).forEach(k=>localStorage.removeItem(k));
+  try{ Object.keys(localStorage).filter(k=>k.indexOf('porra')===0).forEach(k=>localStorage.removeItem(k)); }catch(e){}
+  window.__porraMem={};
   location.reload();
 };
 document.body.style.paddingTop='22px';

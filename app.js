@@ -25,6 +25,17 @@ let myId = null;               // id de jugador en este dispositivo
 let channel = null;
 let activeTab = "bets", betFilter = "open", createCat = "resultado", createKind = "match";
 
+/* ---------- almacenamiento resistente (localStorage puede estar bloqueado
+   al abrir el archivo en local o en modo privado en algunos móviles) -------- */
+const mem = (window.__porraMem = window.__porraMem || {});
+let LS_OK = true;
+try{ localStorage.setItem("__porra_t","1"); localStorage.removeItem("__porra_t"); }catch(e){ LS_OK = false; }
+const store = {
+  get: k => LS_OK ? localStorage.getItem(k) : (k in mem ? mem[k] : null),
+  set: (k,v) => { if(LS_OK) localStorage.setItem(k,v); else mem[k] = String(v); },
+  del: k => { if(LS_OK) localStorage.removeItem(k); else delete mem[k]; },
+};
+
 /* ---------- utilidades ---------- */
 const $  = id => document.getElementById(id);
 const uid = () => Math.random().toString(36).slice(2,9);
@@ -46,8 +57,8 @@ function show(screen){
    CONFIG / CLIENTE
    ============================================================ */
 function getConfig(){
-  const url = localStorage.getItem(LS.url) || (window.PORRA_CONFIG && window.PORRA_CONFIG.SUPABASE_URL) || "";
-  const key = localStorage.getItem(LS.key) || (window.PORRA_CONFIG && window.PORRA_CONFIG.SUPABASE_ANON_KEY) || "";
+  const url = store.get(LS.url) || (window.PORRA_CONFIG && window.PORRA_CONFIG.SUPABASE_URL) || "";
+  const key = store.get(LS.key) || (window.PORRA_CONFIG && window.PORRA_CONFIG.SUPABASE_ANON_KEY) || "";
   return {url:url.trim(), key:key.trim()};
 }
 function initClient(){
@@ -63,7 +74,7 @@ function initClient(){
    ============================================================ */
 async function boot(){
   if(!initClient()){ show("setup"); return; }
-  const code = localStorage.getItem(LS.pool);
+  const code = store.get(LS.pool);
   if(code){
     const ok = await enterPool(code, /*silent*/true);
     if(ok) return;
@@ -102,8 +113,8 @@ async function createPool(){
   if(e2) return toast("Error al crear tu jugador: "+e2.message, true);
 
   myId = player.id;
-  localStorage.setItem(LS.pool, pool.code);
-  localStorage.setItem(LS.player(pool.code), myId);
+  store.set(LS.pool, pool.code);
+  store.set(LS.player(pool.code), myId);
   await afterEnter();
   toast(`Porra creada · código ${pool.code} 🎉`);
 }
@@ -120,8 +131,8 @@ async function enterPool(code, silent=false){
   if(error){ if(!silent) toast("Error: "+error.message, true); return false; }
   if(!data){ if(!silent) toast("No existe ninguna porra con ese código", true); return false; }
   pool = data;
-  localStorage.setItem(LS.pool, pool.code);
-  myId = localStorage.getItem(LS.player(pool.code)) || null;
+  store.set(LS.pool, pool.code);
+  myId = store.get(LS.player(pool.code)) || null;
   await afterEnter();
   return true;
 }
@@ -129,7 +140,7 @@ async function enterPool(code, silent=false){
 async function afterEnter(){
   await refresh();
   // si el jugador guardado ya no existe, pedir identidad
-  if(myId && !byId(myId)){ myId = null; localStorage.removeItem(LS.player(pool.code)); }
+  if(myId && !byId(myId)){ myId = null; store.del(LS.player(pool.code)); }
   subscribe();
   if(!myId){ renderPickPlayer(); show("pickplayer"); }
   else { renderApp(); show("app"); }
@@ -137,7 +148,7 @@ async function afterEnter(){
 
 function leavePool(){
   if(channel){ sb.removeChannel(channel); channel=null; }
-  localStorage.removeItem(LS.pool);
+  store.del(LS.pool);
   pool=null; myId=null; players=[]; bets=[]; wagers=[];
   show("lobby");
   $("joinCode").value=""; $("lobbyName").value=""; $("lobbyMyName").value="";
@@ -190,7 +201,7 @@ function renderPickPlayer(){
   }
 }
 async function claimPlayer(id){
-  myId = id; localStorage.setItem(LS.player(pool.code), id);
+  myId = id; store.set(LS.player(pool.code), id);
   renderApp(); show("app"); toast("Hola de nuevo, "+byId(id).name+" 👋");
 }
 async function createPlayer(){
@@ -199,7 +210,7 @@ async function createPlayer(){
   const {data,error} = await sb.from("players")
     .insert({pool_id:pool.id, name, balance:pool.starting_balance}).select().single();
   if(error) return toast("Error: "+error.message, true);
-  myId = data.id; localStorage.setItem(LS.player(pool.code), myId);
+  myId = data.id; store.set(LS.player(pool.code), myId);
   await refresh(); renderApp(); show("app");
   toast(`¡Bienvenido a la porra, ${name}! 🎉`);
 }
@@ -548,8 +559,8 @@ function saveConfigFromUI(){
   const url = $("cfgUrl").value.trim();
   const key = $("cfgKey").value.trim();
   if(!url || !key) return toast("Rellena los dos campos", true);
-  localStorage.setItem(LS.url, url);
-  localStorage.setItem(LS.key, key);
+  store.set(LS.url, url);
+  store.set(LS.key, key);
   if(initClient()){ toast("Conectado ✔️"); boot(); }
 }
 
