@@ -18,7 +18,6 @@ begin
   end if;
   if body is not null then
     for ev in select jsonb_array_elements(body) loop
-      if coalesce(ev->>'completed','false')='true' then continue; end if;          -- finales -> openfootball
       if ev->'scores' is null or jsonb_typeof(ev->'scores')<>'array' then continue; end if;
       home := odds_norm(ev->>'home_team'); away := odds_norm(ev->>'away_team');
       select * into mt from matches
@@ -28,10 +27,18 @@ begin
       s_home := (select sc->>'score' from jsonb_array_elements(ev->'scores') sc where odds_norm(sc->>'name')=home limit 1);
       s_away := (select sc->>'score' from jsonb_array_elements(ev->'scores') sc where odds_norm(sc->>'name')=away limit 1);
       if s_home is null or s_away is null then continue; end if;
-      update matches set status='live',
-        score_a=(case when mt.team_a=home then s_home else s_away end)::int,
-        score_b=(case when mt.team_b=home then s_home else s_away end)::int
-      where id=mt.id;
+      if coalesce(ev->>'completed','false')='true' then
+        update matches set status='finished',
+          score_a=(case when mt.team_a=home then s_home else s_away end)::int,
+          score_b=(case when mt.team_b=home then s_home else s_away end)::int
+        where id=mt.id;
+        perform settle_match_main(mt.id);   -- liquida ya porra + resultado/marcador/+-/ambos/par-impar
+      else
+        update matches set status='live',
+          score_a=(case when mt.team_a=home then s_home else s_away end)::int,
+          score_b=(case when mt.team_b=home then s_home else s_away end)::int
+        where id=mt.id;
+      end if;
     end loop;
   end if;
 
@@ -40,7 +47,7 @@ begin
     where status='live' or (status='scheduled' and kickoff is not null and now() between kickoff and kickoff + interval '150 minutes');
   select value into key from app_secrets where name='odds_api_key';
   if key is not null and nlive>0 then
-    newid := net.http_get('https://api.the-odds-api.com/v4/sports/soccer_fifa_world_cup/scores/?apiKey='||key);
+    newid := net.http_get('https://api.the-odds-api.com/v4/sports/soccer_fifa_world_cup/scores/?daysFrom=1&apiKey='||key);
     insert into cron_state(name,req_id) values('scores',newid) on conflict(name) do update set req_id=excluded.req_id;
   end if;
   delete from net._http_response where created < now() - interval '1 hour';

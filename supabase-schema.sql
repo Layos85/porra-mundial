@@ -53,6 +53,7 @@ create table if not exists matches (
   created_at timestamptz default now()
 );
 alter table matches add column if not exists pens integer not null default 0;   -- goles de penalti
+alter table matches add column if not exists settled_scorers boolean not null default false;  -- goleador/penalti liquidados (necesitan datos de openfootball)
 
 -- ---------- Pronósticos (porra base) ----------
 create table if not exists predictions (
@@ -339,18 +340,36 @@ returns boolean language sql immutable as $$
     else false end;
 $$;
 
-create or replace function settle_match(p_match uuid)
+-- Liquida UN reto (paga a creador o rivales). Helper común.
+create or replace function settle_one_challenge(p_ch uuid, sa integer, sb integer, p_scorers jsonb, p_pens integer)
 returns void language plpgsql security definer as $$
-declare m matches%rowtype; cfg config%rowtype; pr predictions%rowtype; ch challenges%rowtype; tk challenge_takers%rowtype;
-  v_out text; v_p numeric; v_f numeric; v_pts numeric; won boolean; begin
+declare ch challenges%rowtype; tk challenge_takers%rowtype; won boolean; begin
+  select * into ch from challenges where id=p_ch for update;
+  if ch.status<>'open' then return; end if;
+  if not exists (select 1 from challenge_takers where challenge_id=ch.id) then
+    update players set points=points+ch.stake where id=ch.creator_id;
+    update challenges set status='void', resolved_at=now() where id=ch.id; return;
+  end if;
+  won := challenge_creator_wins(ch.market, ch.line, ch.selection, sa, sb, p_scorers, p_pens);
+  for tk in select * from challenge_takers where challenge_id=ch.id loop
+    if won then update players set points=points+ch.stake+tk.liability where id=ch.creator_id;
+    else update players set points=points+tk.liability+ch.stake where id=tk.player_id; end if;
+  end loop;
+  update challenges set status='resolved', creator_won=won, resolved_at=now() where id=ch.id;
+end; $$;
+
+-- FASE 1: porra + retos que NO necesitan goleadores (resultado, marcador, +/-, ambos marcan, par/impar).
+create or replace function settle_match_main(p_match uuid)
+returns void language plpgsql security definer as $$
+declare m matches%rowtype; cfg config%rowtype; pr predictions%rowtype; ch challenges%rowtype;
+  v_out text; v_p numeric; v_f numeric; v_pts numeric; begin
   select * into m from matches where id=p_match;
   if not found or m.status<>'finished' or m.score_a is null or m.score_b is null or m.settled then return; end if;
   select * into cfg from config where id;
-  if not coalesce(cfg.started,false) then return; end if;   -- no se liquida hasta que el organizador da Comenzar
+  if not coalesce(cfg.started,false) then return; end if;
   v_out := outcome_1x2(m.score_a,m.score_b);
   v_p := case v_out when '1' then m.p_a when 'X' then m.p_draw else m.p_b end;
   v_f := difficulty_factor(coalesce(v_p,1));
-
   for pr in select * from predictions where match_id=p_match loop
     if pr.pred_a=m.score_a and pr.pred_b=m.score_b then v_pts := cfg.pts_exact*v_f;
     elsif outcome_1x2(pr.pred_a,pr.pred_b)=v_out then v_pts := cfg.pts_winner*v_f;
@@ -358,22 +377,30 @@ declare m matches%rowtype; cfg config%rowtype; pr predictions%rowtype; ch challe
     update predictions set points=v_pts where id=pr.id;
     if v_pts>0 then update players set points=points+v_pts where id=pr.player_id; end if;
   end loop;
-
-  for ch in select * from challenges where match_id=p_match and status='open' loop
-    if not exists (select 1 from challenge_takers where challenge_id=ch.id) then
-      update players set points=points+ch.stake where id=ch.creator_id;
-      update challenges set status='void', resolved_at=now() where id=ch.id; continue;
-    end if;
-    won := challenge_creator_wins(ch.market, ch.line, ch.selection, m.score_a, m.score_b, m.scorers, m.pens);
-    for tk in select * from challenge_takers where challenge_id=ch.id loop
-      if won then update players set points=points+ch.stake+tk.liability where id=ch.creator_id;
-      else update players set points=points+tk.liability+ch.stake where id=tk.player_id; end if;
-    end loop;
-    update challenges set status='resolved', creator_won=won, resolved_at=now() where id=ch.id;
+  for ch in select * from challenges where match_id=p_match and status='open' and market in ('1x2','ou','btts','oddeven','exact') loop
+    perform settle_one_challenge(ch.id, m.score_a, m.score_b, m.scorers, m.pens);
   end loop;
-
   update matches set settled=true where id=p_match;
 end; $$;
+
+-- FASE 2: retos de goleador y penalti (necesitan datos de openfootball).
+create or replace function settle_match_scorers(p_match uuid)
+returns void language plpgsql security definer as $$
+declare m matches%rowtype; cfg config%rowtype; ch challenges%rowtype; begin
+  select * into m from matches where id=p_match;
+  if not found or m.status<>'finished' or m.score_a is null or m.settled_scorers then return; end if;
+  select * into cfg from config where id;
+  if not coalesce(cfg.started,false) then return; end if;
+  for ch in select * from challenges where match_id=p_match and status='open' and market in ('scorer','pens') loop
+    perform settle_one_challenge(ch.id, m.score_a, m.score_b, m.scorers, m.pens);
+  end loop;
+  update matches set settled_scorers=true where id=p_match;
+end; $$;
+
+-- Conveniencia: ambas fases (desde la sync de openfootball, que sí tiene goleadores).
+create or replace function settle_match(p_match uuid)
+returns void language plpgsql security definer as $$
+begin perform settle_match_main(p_match); perform settle_match_scorers(p_match); end; $$;
 
 create or replace function void_started_open_challenges()
 returns void language plpgsql security definer as $$
@@ -406,7 +433,8 @@ declare known boolean; ra numeric; rb numeric; va numeric; vd numeric; vb numeri
           va, vd, vb)
   on conflict (ext_id) do update set
     stage=excluded.stage, grp=excluded.grp, team_a=excluded.team_a, team_b=excluded.team_b,
-    teams_known=excluded.teams_known, kickoff=excluded.kickoff, status=excluded.status,
+    teams_known=excluded.teams_known, kickoff=excluded.kickoff,
+    status=case when excluded.status='finished' or matches.status='finished' then 'finished' else excluded.status end,
     score_a=coalesce(excluded.score_a, matches.score_a), score_b=coalesce(excluded.score_b, matches.score_b),
     scorers=excluded.scorers, pens=excluded.pens,
     p_a=coalesce(matches.p_a,excluded.p_a), p_draw=coalesce(matches.p_draw,excluded.p_draw),

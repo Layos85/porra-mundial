@@ -43,10 +43,14 @@ begin
         where (g->>'penalty')='true';
     perform upsert_match(v_ext,v_stage,v_grp,v_a,v_b,v_kick,v_status,v_sa,v_sb,v_scorers,v_pens);
     n := n+1;
+    if v_status='finished' then
+      select id into mid from matches where ext_id=v_ext;
+      perform settle_match(mid);   -- openfootball tiene goleadores: liquida ambas fases
+    end if;
   end loop;
   perform void_started_open_challenges();
-  for mid in select id from matches where status='finished' and settled=false loop
-    perform settle_match(mid);
+  for mid in select id from matches where status='finished' and not settled loop
+    perform settle_match_main(mid);   -- red de seguridad: finales adelantados por Odds API
   end loop;
   return n;
 end; $$;
