@@ -157,9 +157,9 @@ declare m matches%rowtype; cfg config%rowtype; lam record; pp numeric; real nume
 begin
   select * into m from matches where id=p_match; if not found then return 2.0; end if;
   select * into cfg from config where id;
-  if p_market='1x2' then real := (m.odds#>>('{1x2,'||p_selection||'}'))::numeric;
-  elsif p_market='ou' then real := (m.odds#>>('{ou,'||p_line::text||','||p_selection||'}'))::numeric;
-  elsif p_market='btts' then real := (m.odds#>>('{btts,'||p_selection||'}'))::numeric;
+  if p_market='1x2' then real := (m.odds #>> ('{1x2,'||p_selection||'}')::text[])::numeric;
+  elsif p_market='ou' then real := (m.odds #>> ('{ou,'||p_line::text||','||p_selection||'}')::text[])::numeric;
+  elsif p_market='btts' then real := (m.odds #>> ('{btts,'||p_selection||'}')::text[])::numeric;
   end if;
   if real is not null and real>1 then return real; end if;
 
