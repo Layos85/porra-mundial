@@ -407,7 +407,8 @@ declare known boolean; ra numeric; rb numeric; va numeric; vd numeric; vb numeri
   on conflict (ext_id) do update set
     stage=excluded.stage, grp=excluded.grp, team_a=excluded.team_a, team_b=excluded.team_b,
     teams_known=excluded.teams_known, kickoff=excluded.kickoff, status=excluded.status,
-    score_a=excluded.score_a, score_b=excluded.score_b, scorers=excluded.scorers, pens=excluded.pens,
+    score_a=coalesce(excluded.score_a, matches.score_a), score_b=coalesce(excluded.score_b, matches.score_b),
+    scorers=excluded.scorers, pens=excluded.pens,
     p_a=coalesce(matches.p_a,excluded.p_a), p_draw=coalesce(matches.p_draw,excluded.p_draw),
     p_b=coalesce(matches.p_b,excluded.p_b);
 end; $$;
