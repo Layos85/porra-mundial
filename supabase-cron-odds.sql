@@ -25,6 +25,7 @@ create or replace function fetch_odds()
 returns void language plpgsql security definer as $$
 declare key text; body jsonb; last bigint; newid bigint; ev jsonb; home text; away text; mt matches%rowtype;
   bk jsonb; h2h jsonb; tot jsonb; swap boolean; v_odds jsonb; hmap jsonb; pt text; over_p numeric; under_p numeric; ou jsonb;
+  o1 numeric; ox numeric; o2 numeric; s numeric;
 begin
   -- 1) procesar respuesta del tic anterior
   select req_id into last from cron_state where name='odds';
@@ -58,7 +59,16 @@ begin
         end loop;
         v_odds := v_odds || jsonb_build_object('ou', ou);
       end if;
-      if v_odds <> '{}'::jsonb then update matches set odds = v_odds where id = mt.id; end if;
+      if v_odds <> '{}'::jsonb then
+        -- coordinar la dificultad de la PORRA con las casas: probabilidades implícitas del 1X2 (quitando el margen)
+        o1 := (v_odds#>>'{1x2,1}')::numeric; ox := (v_odds#>>'{1x2,X}')::numeric; o2 := (v_odds#>>'{1x2,2}')::numeric;
+        if o1>0 and ox>0 and o2>0 then
+          s := 1/o1 + 1/ox + 1/o2;
+          update matches set odds=v_odds, p_a=(1/o1)/s, p_draw=(1/ox)/s, p_b=(1/o2)/s where id=mt.id;
+        else
+          update matches set odds=v_odds where id=mt.id;
+        end if;
+      end if;
     end loop;
   end if;
   -- 2) disparar la siguiente descarga

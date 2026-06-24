@@ -190,17 +190,17 @@ end; $$;
 -- ============================================================
 --  RPCs: jugador y pronóstico
 -- ============================================================
-create or replace function upsert_player(p_name text, p_recovery text)
+-- Login SOLO por nombre: si el nombre existe, entra a esa cuenta; si no, la crea.
+drop function if exists upsert_player(text, text);
+create or replace function upsert_player(p_name text)
 returns players language plpgsql security definer as $$
 declare v players%rowtype; v_start numeric; begin
-  select * into v from players where recovery_code=p_recovery; if found then return v; end if;
-  if exists (select 1 from players where lower(btrim(name))=lower(btrim(p_name))) then
-    raise exception 'Ese nombre ya está cogido, elige otro';
-  end if;
+  select * into v from players where lower(btrim(name))=lower(btrim(p_name)); if found then return v; end if;
   select start_points into v_start from config where id;
   begin
-    insert into players(name,recovery_code,points) values (btrim(p_name),p_recovery,v_start) returning * into v;
-  exception when unique_violation then raise exception 'Ese nombre ya está cogido, elige otro';
+    insert into players(name,recovery_code,points) values (btrim(p_name), gen_random_uuid()::text, v_start) returning * into v;
+  exception when unique_violation then
+    select * into v from players where lower(btrim(name))=lower(btrim(p_name)); return v;  -- carrera: devuelve el existente
   end;
   update config set admin_id = v.id where admin_id is null;   -- el primero en entrar es el organizador
   return v;

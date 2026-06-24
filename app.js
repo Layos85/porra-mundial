@@ -3,7 +3,7 @@
    Porra del Mundial 2026 — app real (Supabase)
    ============================================================ */
 
-const LS = { pid:"porra.playerId", rec:"porra.recovery" };
+const LS = { pid:"porra.playerId" };
 
 let sb=null, me=null;
 let players=[], matches=[], challenges=[], takers=[], myPreds={};
@@ -75,18 +75,10 @@ async function doLogin(){
   if(loggingIn) return;
   const name=$("loginName").value.trim(); if(!name) return toast("Escribe tu nombre",true);
   loggingIn=true; $("loginBtn").disabled=true;
-  const rec=genCode();
-  const {data,error}=await sb.rpc("upsert_player",{p_name:name,p_recovery:rec});
+  const {data,error}=await sb.rpc("upsert_player",{p_name:name});
   if(error){ loggingIn=false; $("loginBtn").disabled=false; return toast("Error: "+error.message,true); }
-  me=data; localStorage.setItem(LS.pid,me.id); localStorage.setItem(LS.rec,me.recovery_code);
-  await afterLogin(); toast("¡Hola, "+esc(me.name)+"! Tu código: <b>"+me.recovery_code+"</b>",true);
-}
-async function doRecover(){
-  const rec=$("recoverCode").value.trim().toUpperCase(); if(!rec) return toast("Pega tu código",true);
-  const {data}=await sb.from("players").select().eq("recovery_code",rec).maybeSingle();
-  if(!data) return toast("Código no válido",true);
-  me=data; localStorage.setItem(LS.pid,me.id); localStorage.setItem(LS.rec,me.recovery_code);
-  await afterLogin(); toast("Cuenta recuperada 👋");
+  me=data; localStorage.setItem(LS.pid,me.id);
+  await afterLogin(); toast("¡Hola, "+esc(me.name)+"! 👋",true);
 }
 async function afterLogin(){ await refresh(); subscribe(); route(); }
 function route(){ if(!me) return; show("app"); render(); }
@@ -353,15 +345,10 @@ function renderRank(){
     || `<div class="empty">Aún no hay jugadores.</div>`;
 }
 
-/* ---------- código de recuperación ---------- */
-function showMyCode(){ const c=localStorage.getItem(LS.rec); if(c){ navigator.clipboard?.writeText(c); toast("Tu código: <b>"+c+"</b> (copiado). Guárdalo para entrar desde otro móvil.",true); } }
-
 /* ---------- wiring ---------- */
 function wire(){
   $("loginBtn").addEventListener("click",doLogin);
   $("loginName").addEventListener("keydown",e=>{if(e.key==="Enter")doLogin();});
-  $("recoverBtn").addEventListener("click",doRecover);
-  $("myCodeBtn").addEventListener("click",showMyCode);
   $("tabMatchesBtn").addEventListener("click",()=>setTab("matches"));
   $("tabRankBtn").addEventListener("click",()=>setTab("rank"));
   document.querySelectorAll(".filters button").forEach(b=>b.addEventListener("click",()=>setFilter(b.dataset.f,b)));

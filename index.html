@@ -198,7 +198,6 @@
 <style>
   .hide{display:none!important}
   .muted{color:var(--muted)} .small{font-size:.8rem}
-  hr{border:none;border-top:1px solid var(--line)}
 </style>
 </head>
 <body>
@@ -206,17 +205,13 @@
 <div id="toast" class="toast"></div>
 
 <section id="screen-login" class="hide">
-  <div class="phone" style="padding-top:42px">
+  <div class="phone" style="padding-top:60px">
     <div class="match" style="text-align:center">
       <div class="crest" style="margin:0 auto 12px">⚽</div>
       <h2 style="margin:0 0 4px">Porra del Mundial 2026</h2>
-      <p class="muted small" style="margin:0 0 18px">Entra con tu nombre. Te damos un código para recuperar tu cuenta en otro móvil.</p>
+      <p class="muted small" style="margin:0 0 18px">Entra con tu nombre. Si entras desde otro móvil, escribe el mismo nombre y recuperas tu cuenta.</p>
       <input id="loginName" class="stake" placeholder="Tu nombre" style="margin-bottom:10px">
       <button id="loginBtn" class="btn gold">Entrar</button>
-      <hr style="margin:18px 0">
-      <p class="muted small" style="margin:0 0 8px">¿Ya jugabas? Pega tu código:</p>
-      <input id="recoverCode" class="stake" placeholder="PM-XXXXXX" style="margin-bottom:10px">
-      <button id="recoverBtn" class="btn ghost">Recuperar cuenta</button>
     </div>
   </div>
 </section>
@@ -227,7 +222,6 @@
       <div class="crest" id="avatar">?</div>
       <div class="who"><b id="userName">—</b><small>liga global</small></div>
       <div class="bank"><span id="userPts">0</span></div>
-      <button id="myCodeBtn" class="btn ghost sm" style="width:auto;margin-left:8px">Código</button>
     </div>
     <div id="preBanner" class="ribbon" style="display:none;margin-top:12px"></div>
     <div class="tabs">
