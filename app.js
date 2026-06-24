@@ -82,7 +82,16 @@ async function doLogin(){
   await afterLogin(); toast("¡Hola, "+esc(me.name)+"! 👋",true);
 }
 async function afterLogin(){ await refresh(); subscribe(); route(); }
-function route(){ if(!me) return; show("app"); render(); }
+function route(){
+  if(!me) return;
+  // auto-actualización: si la versión de la app cambió en el servidor, recarga a la última
+  if(gameConfig && gameConfig.app_version){
+    const seen=localStorage.getItem("porra.seenVersion"), cur=String(gameConfig.app_version);
+    if(seen!==null && seen!==cur){ localStorage.setItem("porra.seenVersion",cur); location.replace(location.pathname+"?v="+Date.now()); return; }
+    if(seen===null) localStorage.setItem("porra.seenVersion",cur);
+  }
+  show("app"); render();
+}
 function renderPreBanner(){
   const pb=$("preBanner"); if(!pb) return;
   if(gameConfig && !gameConfig.started){

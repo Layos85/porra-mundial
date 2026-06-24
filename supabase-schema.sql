@@ -20,6 +20,7 @@ create table if not exists config (
 insert into config (id) values (true) on conflict (id) do nothing;
 alter table config add column if not exists started  boolean not null default false;
 alter table config add column if not exists admin_id uuid;
+alter table config add column if not exists app_version text not null default '1';   -- súbelo para forzar recarga de todos los clientes
 
 -- ---------- Selecciones / convocatorias ----------
 create table if not exists team_strength ( name text primary key, rating numeric not null );
