@@ -1,198 +1,346 @@
 -- ============================================================
---  Porra del Mundial — esquema de base de datos (Supabase)
---  Pega TODO este script en: Supabase → SQL Editor → New query → Run
---  (Se puede ejecutar varias veces sin problema.)
+--  Porra del Mundial 2026 — esquema + lógica (Supabase/Postgres)
+--  Pega TODO en: Supabase → SQL Editor → New query → Run.
+--  Idempotente: se puede ejecutar varias veces.
 -- ============================================================
-
 create extension if not exists "pgcrypto";
 
--- ---------- Tablas ----------
-create table if not exists pools (
-  id               uuid primary key default gen_random_uuid(),
-  code             text unique not null,
-  name             text not null,
-  starting_balance numeric not null default 1000,
-  created_at       timestamptz default now()
+-- ---------- Configuración (fila única) ----------
+create table if not exists config (
+  id boolean primary key default true check (id),
+  start_points numeric not null default 1000,
+  pts_exact    numeric not null default 50,
+  pts_winner   numeric not null default 20,
+  thr_fav      numeric not null default 0.50,
+  thr_even     numeric not null default 0.30,
+  fac_even     numeric not null default 1.5,
+  fac_surprise numeric not null default 3,
+  odds_margin  numeric not null default 0.94
+);
+insert into config (id) values (true) on conflict (id) do nothing;
+
+-- ---------- Selecciones / convocatorias ----------
+create table if not exists team_strength ( name text primary key, rating numeric not null );
+create table if not exists team_squads (
+  id uuid primary key default gen_random_uuid(),
+  team text not null, player text not null, pos text,
+  unique (team, player)
 );
 
+-- ---------- Jugadores (liga global) ----------
 create table if not exists players (
-  id         uuid primary key default gen_random_uuid(),
-  pool_id    uuid references pools(id) on delete cascade,
-  name       text not null,
-  balance    numeric not null default 0,
+  id uuid primary key default gen_random_uuid(),
+  name text not null, recovery_code text unique not null,
+  points numeric not null default 1000, created_at timestamptz default now()
+);
+
+-- ---------- Partidos (los llena el cron) ----------
+create table if not exists matches (
+  id uuid primary key default gen_random_uuid(),
+  ext_id text unique not null,
+  stage text not null, grp text,
+  team_a text not null, team_b text not null, teams_known boolean not null default false,
+  kickoff timestamptz, status text not null default 'scheduled',
+  score_a integer, score_b integer, scorers jsonb not null default '[]',
+  p_a numeric, p_draw numeric, p_b numeric,
+  odds jsonb not null default '{}',
+  settled boolean not null default false,
   created_at timestamptz default now()
 );
 
-create table if not exists bets (
-  id                uuid primary key default gen_random_uuid(),
-  pool_id           uuid references pools(id) on delete cascade,
-  creator_id        uuid references players(id) on delete set null,
-  kind              text not null default 'free',   -- 'match' (pronostico) | 'free' (libre)
-  category          text not null,
-  question          text not null,
-  options           jsonb not null default '[]',    -- apuestas libres: [{id,label,odds}]
-  -- pronostico de partido:
-  team_a            text,
-  team_b            text,
-  odds_exact        numeric,                         -- cuota si aciertas el MARCADOR EXACTO (mayor)
-  odds_winner       numeric,                         -- cuota si aciertas solo el GANADOR (menor)
-  real_a            integer,                         -- resultado real al resolver
-  real_b            integer,
-  status            text not null default 'open',
-  winning_option_id text,                            -- apuestas libres
-  created_at        timestamptz default now(),
-  resolved_at       timestamptz
+-- ---------- Pronósticos (porra base) ----------
+create table if not exists predictions (
+  id uuid primary key default gen_random_uuid(),
+  match_id uuid not null references matches(id) on delete cascade,
+  player_id uuid not null references players(id) on delete cascade,
+  pred_a integer not null, pred_b integer not null, points numeric,
+  created_at timestamptz default now(), updated_at timestamptz default now(),
+  unique (match_id, player_id)
 );
 
-create table if not exists wagers (
-  id         uuid primary key default gen_random_uuid(),
-  bet_id     uuid references bets(id) on delete cascade,
-  pool_id    uuid references pools(id) on delete cascade,
-  player_id  uuid references players(id) on delete cascade,
-  option_id  text,                                   -- apuestas libres
-  pred_a     integer,                                -- pronostico de partido: marcador previsto
-  pred_b     integer,
-  amount     numeric not null,
-  created_at timestamptz default now()
+-- ---------- Retos (1-contra-varios) ----------
+create table if not exists challenges (
+  id uuid primary key default gen_random_uuid(),
+  match_id uuid not null references matches(id) on delete cascade,
+  creator_id uuid not null references players(id) on delete cascade,
+  market text not null,            -- 1x2|ou|btts|oddeven|exact|scorer
+  line numeric,
+  selection text not null,
+  odds numeric not null check (odds > 1),
+  stake numeric not null check (stake > 0),
+  max_takers integer not null default 0,   -- 0 = sin límite
+  status text not null default 'open',      -- open|resolved|void
+  creator_won boolean,
+  created_at timestamptz default now(), resolved_at timestamptz
+);
+create table if not exists challenge_takers (
+  id uuid primary key default gen_random_uuid(),
+  challenge_id uuid not null references challenges(id) on delete cascade,
+  player_id uuid not null references players(id) on delete cascade,
+  liability numeric not null,
+  created_at timestamptz default now(),
+  unique (challenge_id, player_id)
 );
 
--- Columnas nuevas para bases de datos creadas con una version anterior:
-alter table bets   add column if not exists kind        text not null default 'free';
-alter table bets   add column if not exists team_a      text;
-alter table bets   add column if not exists team_b      text;
-alter table bets   add column if not exists odds_exact  numeric;
-alter table bets   add column if not exists odds_winner numeric;
-alter table bets   add column if not exists real_a      integer;
-alter table bets   add column if not exists real_b      integer;
-alter table bets   alter column options set default '[]';
-alter table wagers add column if not exists pred_a      integer;
-alter table wagers add column if not exists pred_b      integer;
-alter table wagers alter column option_id drop not null;
-
--- ---------- Seguridad (juego casual con dinero ficticio) ----------
-alter table pools   enable row level security;
+-- ---------- RLS abierta (puntos ficticios, sin datos sensibles) ----------
+alter table config enable row level security;
+alter table team_strength enable row level security;
+alter table team_squads enable row level security;
 alter table players enable row level security;
-alter table bets    enable row level security;
-alter table wagers  enable row level security;
+alter table matches enable row level security;
+alter table predictions enable row level security;
+alter table challenges enable row level security;
+alter table challenge_takers enable row level security;
 
-drop policy if exists "open pools"   on pools;
-drop policy if exists "open players" on players;
-drop policy if exists "open bets"    on bets;
-drop policy if exists "open wagers"  on wagers;
+drop policy if exists ro_config on config;
+drop policy if exists ro_strength on team_strength;
+drop policy if exists ro_squads on team_squads;
+drop policy if exists rw_players on players;
+drop policy if exists ro_matches on matches;
+drop policy if exists rw_preds on predictions;
+drop policy if exists rw_chals on challenges;
+drop policy if exists rw_takers on challenge_takers;
 
-create policy "open pools"   on pools   for all using (true) with check (true);
-create policy "open players" on players for all using (true) with check (true);
-create policy "open bets"    on bets    for all using (true) with check (true);
-create policy "open wagers"  on wagers  for all using (true) with check (true);
+create policy ro_config   on config        for select using (true);
+create policy ro_strength on team_strength for select using (true);
+create policy ro_squads   on team_squads   for select using (true);
+create policy rw_players  on players       for all using (true) with check (true);
+create policy ro_matches  on matches       for select using (true);
+create policy rw_preds    on predictions   for all using (true) with check (true);
+create policy rw_chals    on challenges     for all using (true) with check (true);
+create policy rw_takers   on challenge_takers for all using (true) with check (true);
 
 -- ============================================================
---  APUESTAS LIBRES ("por fuera")
+--  Probabilidad, dificultad y modelo de cuotas
 -- ============================================================
-
--- Apostar de forma atomica (cambia tu apuesta si ya tenias una)
-create or replace function place_wager(p_bet_id uuid, p_player_id uuid, p_option_id text, p_amount numeric)
-returns void language plpgsql security definer as $$
-declare
-  v_status text; v_pool uuid; v_balance numeric; v_prev numeric := 0;
+create or replace function calc_probs(r_a numeric, r_b numeric,
+  out p_a numeric, out p_draw numeric, out p_b numeric)
+language plpgsql immutable as $$
+declare e_a numeric;
 begin
-  select status, pool_id into v_status, v_pool from bets where id = p_bet_id;
-  if v_status is null then raise exception 'Apuesta no encontrada'; end if;
-  if v_status <> 'open' then raise exception 'La apuesta ya esta cerrada'; end if;
-  if p_amount <= 0 then raise exception 'Cantidad no valida'; end if;
-
-  select coalesce(sum(amount),0) into v_prev from wagers where bet_id = p_bet_id and player_id = p_player_id;
-  select balance into v_balance from players where id = p_player_id;
-  if v_balance + v_prev < p_amount then raise exception 'Saldo insuficiente'; end if;
-
-  delete from wagers where bet_id = p_bet_id and player_id = p_player_id;
-  update players set balance = balance + v_prev - p_amount where id = p_player_id;
-
-  insert into wagers(bet_id, pool_id, player_id, option_id, amount)
-  values (p_bet_id, v_pool, p_player_id, p_option_id, p_amount);
+  e_a := 1.0/(1.0+power(10.0,(r_b-r_a)/400.0));
+  p_draw := 0.30*(1.0-2.0*abs(e_a-0.5)); if p_draw<0 then p_draw:=0; end if;
+  p_a := (1.0-p_draw)*e_a; p_b := (1.0-p_draw)*(1.0-e_a);
 end; $$;
 
--- Resolver apuesta libre y pagar premios (apostado x cuota)
-create or replace function resolve_bet(p_bet_id uuid, p_winning_option_id text)
-returns void language plpgsql security definer as $$
-declare
-  v_status text; v_odds numeric; w record;
+create or replace function outcome_1x2(a integer, b integer) returns text
+language sql immutable as $$ select case when a>b then '1' when a=b then 'X' else '2' end; $$;
+
+create or replace function difficulty_factor(p numeric) returns numeric
+language plpgsql stable as $$
+declare c record; begin
+  select thr_fav,thr_even,fac_even,fac_surprise into c from config where id;
+  if p>=c.thr_fav then return 1; elsif p>=c.thr_even then return c.fac_even; else return c.fac_surprise; end if;
+end; $$;
+
+create or replace function poisson_pmf(k integer, lam numeric) returns numeric
+language plpgsql immutable as $$
+declare p numeric; i integer; begin
+  p := exp(-lam); for i in 1..k loop p := p*lam/i; end loop; return p;
+end; $$;
+
+create or replace function team_lambdas(team_a text, team_b text, out la numeric, out lb numeric)
+language plpgsql stable as $$
+declare ra numeric; rb numeric; d numeric; begin
+  ra := coalesce((select rating from team_strength where name=team_a),1500);
+  rb := coalesce((select rating from team_strength where name=team_b),1500);
+  d := (ra-rb)/100.0;
+  la := least(3.4, greatest(0.3, 1.35+0.18*d));
+  lb := least(3.4, greatest(0.3, 1.35-0.18*d));
+end; $$;
+
+create or replace function suggest_odds(p_match uuid, p_market text, p_selection text, p_line numeric)
+returns numeric language plpgsql stable as $$
+declare m matches%rowtype; cfg config%rowtype; lam record; pp numeric; real numeric; x int; y int; k int;
 begin
-  select status into v_status from bets where id = p_bet_id;
-  if v_status is null then raise exception 'Apuesta no encontrada'; end if;
-  if v_status <> 'open' then raise exception 'La apuesta ya esta resuelta'; end if;
+  select * into m from matches where id=p_match; if not found then return 2.0; end if;
+  select * into cfg from config where id;
+  if p_market='1x2' then real := (m.odds#>>('{1x2,'||p_selection||'}'))::numeric;
+  elsif p_market='ou' then real := (m.odds#>>('{ou,'||p_line::text||','||p_selection||'}'))::numeric;
+  elsif p_market='btts' then real := (m.odds#>>('{btts,'||p_selection||'}'))::numeric;
+  end if;
+  if real is not null and real>1 then return real; end if;
 
-  select (opt->>'odds')::numeric into v_odds
-  from bets, jsonb_array_elements(options) opt
-  where id = p_bet_id and opt->>'id' = p_winning_option_id;
+  if p_market='1x2' then
+    pp := case p_selection when '1' then m.p_a when 'X' then m.p_draw else m.p_b end;
+  else
+    select * into lam from team_lambdas(m.team_a,m.team_b);
+    if p_market='ou' then
+      pp := 0; for k in 0..floor(coalesce(p_line,2.5))::int loop pp := pp+poisson_pmf(k,lam.la+lam.lb); end loop;
+      if p_selection='over' then pp := 1-pp; end if;
+    elsif p_market='btts' then
+      pp := (1-exp(-lam.la))*(1-exp(-lam.lb)); if p_selection='no' then pp := 1-pp; end if;
+    elsif p_market='oddeven' then pp := 0.5;
+    elsif p_market='exact' then
+      x := split_part(p_selection,'-',1)::int; y := split_part(p_selection,'-',2)::int;
+      pp := poisson_pmf(x,lam.la)*poisson_pmf(y,lam.lb);
+    elsif p_market='scorer' then
+      if exists (select 1 from team_squads where team=m.team_a and player=p_selection)
+        then pp := 1-exp(-lam.la/6); else pp := 1-exp(-lam.lb/6); end if;
+    else pp := 0.5; end if;
+  end if;
+  if pp is null or pp<0.004 then pp := 0.004; end if;
+  return round(greatest(1.05, (1/pp)*cfg.odds_margin)::numeric, 2);
+end; $$;
 
-  for w in select * from wagers where bet_id = p_bet_id and option_id = p_winning_option_id loop
-    update players set balance = balance + w.amount * v_odds where id = w.player_id;
+-- ============================================================
+--  RPCs: jugador y pronóstico
+-- ============================================================
+create or replace function upsert_player(p_name text, p_recovery text)
+returns players language plpgsql security definer as $$
+declare v players%rowtype; v_start numeric; begin
+  select * into v from players where recovery_code=p_recovery; if found then return v; end if;
+  select start_points into v_start from config where id;
+  insert into players(name,recovery_code,points) values (trim(p_name),p_recovery,v_start) returning * into v;
+  return v;
+end; $$;
+
+create or replace function place_prediction(p_match uuid, p_player uuid, p_a integer, p_b integer)
+returns void language plpgsql security definer as $$
+declare s text; k timestamptz; known boolean; begin
+  select status,kickoff,teams_known into s,k,known from matches where id=p_match;
+  if not found then raise exception 'Partido no encontrado'; end if;
+  if not known then raise exception 'Aún no se conocen los equipos'; end if;
+  if s<>'scheduled' or (k is not null and now()>=k) then raise exception 'El partido ya ha empezado'; end if;
+  if p_a<0 or p_b<0 then raise exception 'Marcador no válido'; end if;
+  insert into predictions(match_id,player_id,pred_a,pred_b) values (p_match,p_player,p_a,p_b)
+  on conflict (match_id,player_id) do update set pred_a=excluded.pred_a,pred_b=excluded.pred_b,updated_at=now();
+end; $$;
+
+-- ============================================================
+--  RPCs: retos (1-contra-varios)
+-- ============================================================
+create or replace function create_challenge(
+  p_match uuid, p_creator uuid, p_market text, p_line numeric,
+  p_selection text, p_odds numeric, p_stake numeric, p_max integer)
+returns challenges language plpgsql security definer as $$
+declare v challenges%rowtype; s text; k timestamptz; known boolean; bal numeric; begin
+  select status,kickoff,teams_known into s,k,known from matches where id=p_match;
+  if not found then raise exception 'Partido no encontrado'; end if;
+  if not known then raise exception 'Aún no se conocen los equipos'; end if;
+  if s<>'scheduled' or (k is not null and now()>=k) then raise exception 'El partido ya ha empezado'; end if;
+  if p_market not in ('1x2','ou','btts','oddeven','exact','scorer') then raise exception 'Mercado no válido'; end if;
+  if p_odds<=1 then raise exception 'Cuota no válida'; end if;
+  if p_stake<=0 then raise exception 'Puntos no válidos'; end if;
+  select points into bal from players where id=p_creator for update;
+  if bal<p_stake then raise exception 'Saldo insuficiente'; end if;
+  update players set points=points-p_stake where id=p_creator;
+  insert into challenges(match_id,creator_id,market,line,selection,odds,stake,max_takers)
+    values (p_match,p_creator,p_market,p_line,p_selection,p_odds,p_stake,coalesce(p_max,0))
+  returning * into v; return v;
+end; $$;
+
+create or replace function accept_challenge(p_challenge uuid, p_taker uuid)
+returns void language plpgsql security definer as $$
+declare c challenges%rowtype; s text; k timestamptz; n integer; liab numeric; bal numeric; begin
+  select * into c from challenges where id=p_challenge for update;
+  if not found then raise exception 'Reto no encontrado'; end if;
+  if c.status<>'open' then raise exception 'El reto ya no está disponible'; end if;
+  if c.creator_id=p_taker then raise exception 'No puedes aceptar tu propio reto'; end if;
+  if exists (select 1 from challenge_takers where challenge_id=p_challenge and player_id=p_taker)
+    then raise exception 'Ya lo aceptaste'; end if;
+  select count(*) into n from challenge_takers where challenge_id=p_challenge;
+  if c.max_takers>0 and n>=c.max_takers then raise exception 'Reto completo'; end if;
+  select status,kickoff into s,k from matches where id=c.match_id;
+  if s<>'scheduled' or (k is not null and now()>=k) then raise exception 'El partido ya ha empezado'; end if;
+  liab := round(c.stake*(c.odds-1));
+  select points into bal from players where id=p_taker for update;
+  if bal<liab then raise exception 'Saldo insuficiente para cubrir el reto'; end if;
+  update players set points=points-liab where id=p_taker;
+  if n>=1 then
+    select points into bal from players where id=c.creator_id for update;
+    if bal<c.stake then raise exception 'El creador no tiene saldo para otro rival'; end if;
+    update players set points=points-c.stake where id=c.creator_id;
+  end if;
+  insert into challenge_takers(challenge_id,player_id,liability) values (p_challenge,p_taker,liab);
+end; $$;
+
+-- ============================================================
+--  Liquidación (porra + retos), idempotente
+-- ============================================================
+create or replace function challenge_creator_wins(p_market text, p_line numeric, p_sel text,
+  a integer, b integer, p_scorers jsonb)
+returns boolean language sql immutable as $$
+  select case p_market
+    when '1x2'  then outcome_1x2(a,b)=p_sel
+    when 'ou'   then case when p_sel='over' then (a+b) > p_line else (a+b) < p_line end
+    when 'btts' then (case when a>0 and b>0 then 'si' else 'no' end)=p_sel
+    when 'oddeven' then (case when (a+b)%2=0 then 'par' else 'impar' end)=p_sel
+    when 'exact' then p_sel = a::text||'-'||b::text
+    when 'scorer' then p_scorers ? p_sel
+    else false end;
+$$;
+
+create or replace function settle_match(p_match uuid)
+returns void language plpgsql security definer as $$
+declare m matches%rowtype; cfg config%rowtype; pr predictions%rowtype; ch challenges%rowtype; tk challenge_takers%rowtype;
+  v_out text; v_p numeric; v_f numeric; v_pts numeric; won boolean; begin
+  select * into m from matches where id=p_match;
+  if not found or m.status<>'finished' or m.score_a is null or m.score_b is null or m.settled then return; end if;
+  select * into cfg from config where id;
+  v_out := outcome_1x2(m.score_a,m.score_b);
+  v_p := case v_out when '1' then m.p_a when 'X' then m.p_draw else m.p_b end;
+  v_f := difficulty_factor(coalesce(v_p,1));
+
+  for pr in select * from predictions where match_id=p_match loop
+    if pr.pred_a=m.score_a and pr.pred_b=m.score_b then v_pts := cfg.pts_exact*v_f;
+    elsif outcome_1x2(pr.pred_a,pr.pred_b)=v_out then v_pts := cfg.pts_winner*v_f;
+    else v_pts := 0; end if;
+    update predictions set points=v_pts where id=pr.id;
+    if v_pts>0 then update players set points=points+v_pts where id=pr.player_id; end if;
   end loop;
 
-  update bets set status='resolved', winning_option_id=p_winning_option_id, resolved_at=now()
-  where id = p_bet_id;
-end; $$;
-
--- ============================================================
---  PRONOSTICO DE PARTIDO (porra con marcador escalonado)
---  Marcador exacto paga MAS que acertar solo el ganador.
--- ============================================================
-
--- Apostar un marcador a un partido (cambia tu pronostico si ya tenias uno)
-create or replace function place_match_wager(p_bet_id uuid, p_player_id uuid, p_pred_a integer, p_pred_b integer, p_amount numeric)
-returns void language plpgsql security definer as $$
-declare
-  v_status text; v_kind text; v_pool uuid; v_balance numeric; v_prev numeric := 0;
-begin
-  select status, kind, pool_id into v_status, v_kind, v_pool from bets where id = p_bet_id;
-  if v_status is null then raise exception 'Apuesta no encontrada'; end if;
-  if v_kind <> 'match' then raise exception 'Esta apuesta no es un pronostico de partido'; end if;
-  if v_status <> 'open' then raise exception 'El partido ya esta cerrado'; end if;
-  if p_amount <= 0 then raise exception 'Cantidad no valida'; end if;
-  if p_pred_a < 0 or p_pred_b < 0 then raise exception 'Marcador no valido'; end if;
-
-  select coalesce(sum(amount),0) into v_prev from wagers where bet_id = p_bet_id and player_id = p_player_id;
-  select balance into v_balance from players where id = p_player_id;
-  if v_balance + v_prev < p_amount then raise exception 'Saldo insuficiente'; end if;
-
-  delete from wagers where bet_id = p_bet_id and player_id = p_player_id;
-  update players set balance = balance + v_prev - p_amount where id = p_player_id;
-
-  insert into wagers(bet_id, pool_id, player_id, pred_a, pred_b, amount)
-  values (p_bet_id, v_pool, p_player_id, p_pred_a, p_pred_b, p_amount);
-end; $$;
-
--- Resolver un partido con el resultado real y pagar por niveles
-create or replace function resolve_match(p_bet_id uuid, p_real_a integer, p_real_b integer)
-returns void language plpgsql security definer as $$
-declare
-  v_status text; v_kind text; v_oe numeric; v_ow numeric;
-  v_real_sign int; w record; w_sign int;
-begin
-  select status, kind, odds_exact, odds_winner into v_status, v_kind, v_oe, v_ow
-  from bets where id = p_bet_id;
-  if v_status is null then raise exception 'Apuesta no encontrada'; end if;
-  if v_kind <> 'match' then raise exception 'No es un pronostico de partido'; end if;
-  if v_status <> 'open' then raise exception 'El partido ya esta resuelto'; end if;
-
-  v_real_sign := sign(p_real_a - p_real_b);
-
-  for w in select * from wagers where bet_id = p_bet_id loop
-    if w.pred_a = p_real_a and w.pred_b = p_real_b then
-      -- marcador EXACTO -> premio mayor
-      update players set balance = balance + w.amount * v_oe where id = w.player_id;
-    else
-      w_sign := sign(w.pred_a - w.pred_b);
-      if w_sign = v_real_sign then
-        -- solo el GANADOR (o empate) -> premio menor
-        update players set balance = balance + w.amount * v_ow where id = w.player_id;
-      end if;
+  for ch in select * from challenges where match_id=p_match and status='open' loop
+    if not exists (select 1 from challenge_takers where challenge_id=ch.id) then
+      update players set points=points+ch.stake where id=ch.creator_id;
+      update challenges set status='void', resolved_at=now() where id=ch.id; continue;
     end if;
+    won := challenge_creator_wins(ch.market, ch.line, ch.selection, m.score_a, m.score_b, m.scorers);
+    for tk in select * from challenge_takers where challenge_id=ch.id loop
+      if won then update players set points=points+ch.stake+tk.liability where id=ch.creator_id;
+      else update players set points=points+tk.liability+ch.stake where id=tk.player_id; end if;
+    end loop;
+    update challenges set status='resolved', creator_won=won, resolved_at=now() where id=ch.id;
   end loop;
 
-  update bets set status='resolved', real_a=p_real_a, real_b=p_real_b, resolved_at=now()
-  where id = p_bet_id;
+  update matches set settled=true where id=p_match;
 end; $$;
 
--- ---------- Activar sincronizacion en tiempo real ----------
-alter publication supabase_realtime add table pools, players, bets, wagers;
+create or replace function void_started_open_challenges()
+returns void language plpgsql security definer as $$
+declare ch challenges%rowtype; begin
+  for ch in select c.* from challenges c join matches m on m.id=c.match_id
+    where c.status='open' and m.kickoff is not null and now()>=m.kickoff
+      and not exists (select 1 from challenge_takers t where t.challenge_id=c.id) loop
+    update players set points=points+ch.stake where id=ch.creator_id;
+    update challenges set status='void', resolved_at=now() where id=ch.id;
+  end loop;
+end; $$;
+
+-- ============================================================
+--  Upsert de partido (lo llama el cron)
+-- ============================================================
+create or replace function upsert_match(
+  p_ext text, p_stage text, p_grp text, p_a text, p_b text,
+  p_kick timestamptz, p_status text, p_sa integer, p_sb integer, p_scorers jsonb)
+returns void language plpgsql security definer as $$
+declare known boolean; ra numeric; rb numeric; pr record; begin
+  select count(*)=2 into known from team_strength where name in (p_a,p_b);
+  if known then
+    select coalesce((select rating from team_strength where name=p_a),1500) into ra;
+    select coalesce((select rating from team_strength where name=p_b),1500) into rb;
+    select * into pr from calc_probs(ra,rb);
+  end if;
+  insert into matches(ext_id,stage,grp,team_a,team_b,teams_known,kickoff,status,score_a,score_b,scorers,p_a,p_draw,p_b)
+  values (p_ext,p_stage,p_grp,p_a,p_b,known,p_kick,p_status,p_sa,p_sb,coalesce(p_scorers,'[]'),
+          case when known then pr.p_a end, case when known then pr.p_draw end, case when known then pr.p_b end)
+  on conflict (ext_id) do update set
+    stage=excluded.stage, grp=excluded.grp, team_a=excluded.team_a, team_b=excluded.team_b,
+    teams_known=excluded.teams_known, kickoff=excluded.kickoff, status=excluded.status,
+    score_a=excluded.score_a, score_b=excluded.score_b, scorers=excluded.scorers,
+    p_a=coalesce(matches.p_a,excluded.p_a), p_draw=coalesce(matches.p_draw,excluded.p_draw),
+    p_b=coalesce(matches.p_b,excluded.p_b);
+end; $$;
+
+-- ---------- Realtime ----------
+alter publication supabase_realtime add table players, matches, predictions, challenges, challenge_takers;
