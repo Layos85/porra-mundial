@@ -4,6 +4,9 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <meta name="theme-color" content="#0B1A1F">
+<meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+<meta http-equiv="Pragma" content="no-cache">
+<meta http-equiv="Expires" content="0">
 <title>Porra del Mundial 2026</title>
 <style>
   :root{
@@ -222,6 +225,7 @@
       <div class="crest" id="avatar">?</div>
       <div class="who"><b id="userName">—</b><small>liga global</small></div>
       <div class="bank"><span id="userPts">0</span></div>
+      <button class="btn ghost sm" style="width:auto;margin-left:8px" title="Actualizar app" onclick="location.href=location.pathname+'?v='+Date.now()">🔄</button>
     </div>
     <div id="preBanner" class="ribbon" style="display:none;margin-top:12px"></div>
     <div class="tabs">
@@ -240,8 +244,13 @@
   </div>
 </section>
 
-<script src="config.js?v=1782328681333"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-<script src="app.js?v=1782328681333"></script>
+<script>
+  /* carga config.js y app.js SIEMPRE frescos (marca de tiempo por carga) */
+  (function(){ var v=Date.now();
+    document.write('<scr'+'ipt src="config.js?v='+v+'"><\/scr'+'ipt>');
+    document.write('<scr'+'ipt src="app.js?v='+v+'"><\/scr'+'ipt>');
+  })();
+</script>
 </body>
 </html>
