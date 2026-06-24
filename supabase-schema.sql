@@ -324,16 +324,16 @@ create or replace function upsert_match(
   p_ext text, p_stage text, p_grp text, p_a text, p_b text,
   p_kick timestamptz, p_status text, p_sa integer, p_sb integer, p_scorers jsonb)
 returns void language plpgsql security definer as $$
-declare known boolean; ra numeric; rb numeric; pr record; begin
+declare known boolean; ra numeric; rb numeric; va numeric; vd numeric; vb numeric; begin
   select count(*)=2 into known from team_strength where name in (p_a,p_b);
   if known then
-    select coalesce((select rating from team_strength where name=p_a),1500) into ra;
-    select coalesce((select rating from team_strength where name=p_b),1500) into rb;
-    select * into pr from calc_probs(ra,rb);
+    select rating into ra from team_strength where name=p_a;
+    select rating into rb from team_strength where name=p_b;
+    select cp.p_a, cp.p_draw, cp.p_b into va, vd, vb from calc_probs(ra,rb) cp;
   end if;
   insert into matches(ext_id,stage,grp,team_a,team_b,teams_known,kickoff,status,score_a,score_b,scorers,p_a,p_draw,p_b)
   values (p_ext,p_stage,p_grp,p_a,p_b,known,p_kick,p_status,p_sa,p_sb,coalesce(p_scorers,'[]'),
-          case when known then pr.p_a end, case when known then pr.p_draw end, case when known then pr.p_b end)
+          va, vd, vb)
   on conflict (ext_id) do update set
     stage=excluded.stage, grp=excluded.grp, team_a=excluded.team_a, team_b=excluded.team_b,
     teams_known=excluded.teams_known, kickoff=excluded.kickoff, status=excluded.status,
