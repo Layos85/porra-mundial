@@ -163,10 +163,16 @@ function renderMatches(){
   let arr=matches.filter(m=>m.teams_known);
   if(filter==="next") arr=arr.filter(m=>m.status==="scheduled");
   else if(filter==="live") arr=arr.filter(m=>m.status==="live");
-  else arr=arr.filter(m=>m.status==="finished");
+  else arr=arr.filter(m=>m.status==="finished").reverse();
   const el=$("matchList");
   if(!arr.length){ el.innerHTML=`<div class="empty">No hay partidos aquí.</div>`; return; }
-  el.innerHTML=arr.map(matchCard).join("");
+  let head="";
+  if(filter==="done"){
+    let net=0,cnt=0; arr.forEach(m=>{const b=myMatchBreakdown(m); if(b.rows.length){net+=b.total;cnt++;}});
+    const col=net>0?'var(--good)':net<0?'var(--bad)':'var(--muted)';
+    head=`<div class="ribbon" style="border-color:${col}"><b>🏁 Tu balance en finalizados:</b> <b style="color:${col}">${net>0?'+':''}${fmt(net)} pts</b>${cnt?` · en ${cnt} partido(s) que apostaste`:` · aún no has apostado en ninguno`}</div>`;
+  }
+  el.innerHTML=head+arr.map(matchCard).join("");
 }
 function dchip(name,p,isDraw){ const c=dclass(p),f=factor(p);
   return `<div class="dchip ${c}"><div class="dk">${isDraw?"Empate":esc(name)}</div><div class="dv">×${f}</div><div class="dt">${dlabel(p)}</div></div>`; }
