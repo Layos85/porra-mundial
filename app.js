@@ -1,619 +1,371 @@
 "use strict";
 /* ============================================================
-   Porra del Mundial — multijugador online con Supabase
+   Porra del Mundial 2026 — app real (Supabase)
    ============================================================ */
 
-const CATEGORIES = [
-  {id:"resultado", label:"🥅 Resultado (1X2)", opts:["Gana local","Empate","Gana visitante"]},
-  {id:"marcador",  label:"🔢 Marcador exacto", opts:["1-0","2-1","0-0"]},
-  {id:"goleador",  label:"⚽ Goleador",         opts:[]},
-  {id:"sino",      label:"🔀 Sí / No",          opts:["Sí","No"]},
-  {id:"especial",  label:"✨ Especial",          opts:[]},
-];
+const LS = { pid:"porra.playerId", rec:"porra.recovery" };
 
-const LS = {
-  url:  "porra.cfg.url",
-  key:  "porra.cfg.key",
-  pool: "porra.poolCode",
-  player: code => "porra.player." + code,
-};
-
-let sb = null;                 // cliente supabase
-let pool = null;               // {id, code, name, starting_balance}
-let players = [], bets = [], wagers = [];
-let myId = null;               // id de jugador en este dispositivo
-let channel = null;
-let activeTab = "bets", betFilter = "open", createCat = "resultado", createKind = "match";
-
-/* ---------- almacenamiento resistente (localStorage puede estar bloqueado
-   al abrir el archivo en local o en modo privado en algunos móviles) -------- */
-const mem = (window.__porraMem = window.__porraMem || {});
-let LS_OK = true;
-try{ localStorage.setItem("__porra_t","1"); localStorage.removeItem("__porra_t"); }catch(e){ LS_OK = false; }
-const store = {
-  get: k => LS_OK ? localStorage.getItem(k) : (k in mem ? mem[k] : null),
-  set: (k,v) => { if(LS_OK) localStorage.setItem(k,v); else mem[k] = String(v); },
-  del: k => { if(LS_OK) localStorage.removeItem(k); else delete mem[k]; },
-};
+let sb=null, me=null;
+let players=[], matches=[], challenges=[], takers=[], myPreds={};
+let pById={}, gameConfig=null;
+let tab="matches", filter="next", channel=null;
+let editing=null;   // pronóstico en edición {matchId,a,b}
+let creating=null;  // reto en creación
+const squadCache={};
 
 /* ---------- utilidades ---------- */
-const $  = id => document.getElementById(id);
-const uid = () => Math.random().toString(36).slice(2,9);
+const $ = id => document.getElementById(id);
 const fmt = n => Math.round(Number(n)||0).toLocaleString("es-ES");
-const byId = id => players.find(p=>p.id===id);
-const initials = name => (name||"?").trim().slice(0,2).toUpperCase();
-const me = () => byId(myId);
-function escapeHtml(s){ return String(s).replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c])); }
-function toast(msg, bad=false){
-  const t = $("toast");
-  t.textContent = msg; t.classList.toggle("bad", bad); t.classList.add("show");
-  clearTimeout(t._t); t._t = setTimeout(()=>t.classList.remove("show"), 2600);
-}
-function show(screen){
-  ["setup","lobby","pickplayer","app"].forEach(s=> $("screen-"+s).classList.toggle("hide", s!==screen));
+const ini = s => (s||"?").trim().slice(0,2).toUpperCase();
+function esc(s){return String(s==null?"":s).replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));}
+function toast(m,big=false){const t=$("toast");t.innerHTML=m;t.classList.toggle("big",big);t.classList.add("show");clearTimeout(t._t);t._t=setTimeout(()=>t.classList.remove("show"),big?3600:2600);}
+function show(s){["login","lobby","app"].forEach(x=>$("screen-"+x).classList.toggle("hide",x!==s));}
+function genCode(){const c="ABCDEFGHJKLMNPQRSTUVWXYZ23456789";let r="";for(let i=0;i<6;i++)r+=c[Math.floor(Math.random()*c.length)];return "PM-"+r;}
+
+const FLAG = {
+  "Mexico":"🇲🇽","South Africa":"🇿🇦","South Korea":"🇰🇷","Czech Republic":"🇨🇿","Canada":"🇨🇦",
+  "Bosnia & Herzegovina":"🇧🇦","Qatar":"🇶🇦","Switzerland":"🇨🇭","Brazil":"🇧🇷","Haiti":"🇭🇹",
+  "Morocco":"🇲🇦","Scotland":"🏴","Australia":"🇦🇺","Paraguay":"🇵🇾","Turkey":"🇹🇷","USA":"🇺🇸",
+  "Curaçao":"🇨🇼","Ecuador":"🇪🇨","Germany":"🇩🇪","Ivory Coast":"🇨🇮","Japan":"🇯🇵","Netherlands":"🇳🇱",
+  "Sweden":"🇸🇪","Tunisia":"🇹🇳","Belgium":"🇧🇪","Egypt":"🇪🇬","Iran":"🇮🇷","New Zealand":"🇳🇿",
+  "Cape Verde":"🇨🇻","Saudi Arabia":"🇸🇦","Spain":"🇪🇸","Uruguay":"🇺🇾","France":"🇫🇷","Iraq":"🇮🇶",
+  "Norway":"🇳🇴","Senegal":"🇸🇳","Algeria":"🇩🇿","Argentina":"🇦🇷","Austria":"🇦🇹","Jordan":"🇯🇴",
+  "Colombia":"🇨🇴","DR Congo":"🇨🇩","Portugal":"🇵🇹","Uzbekistan":"🇺🇿","Croatia":"🇭🇷","England":"🏴",
+  "Ghana":"🇬🇭","Panama":"🇵🇦"
+};
+const flag = t => FLAG[t] || "🏳️";
+const STAGE = {grupos:"Grupos",dieciseisavos:"Dieciseisavos",octavos:"Octavos",cuartos:"Cuartos",semis:"Semis",tercer_puesto:"3er puesto",final:"Final"};
+const MK_LABEL = {"1x2":"Resultado","ou":"Más/Menos","btts":"Ambos marcan","oddeven":"Par/Impar","exact":"Marcador exacto","scorer":"Goleador"};
+function selName(m, mk, sel, line){
+  switch(mk){
+    case "1x2":  return sel==="1"?"Gana "+m.team_a : sel==="X"?"Empate" : "Gana "+m.team_b;
+    case "ou":   return (sel==="over"?"Más de ":"Menos de ")+line;
+    case "btts": return sel==="si"?"Ambos marcan":"No marcan los dos";
+    case "oddeven": return sel==="par"?"Goles par":"Goles impar";
+    case "exact": return "Será "+sel;
+    case "scorer": return "Marca "+sel;
+    default: return sel;
+  }
 }
 
+/* ---------- dificultad ---------- */
+const factor = p => p>=0.5?1 : p>=0.3?1.5 : 3;
+const dclass = p => p>=0.5?"fav" : p>=0.3?"even":"surprise";
+const dlabel = p => p>=0.5?"Favorito" : p>=0.3?"Igualado":"Sorpresa";
+
 /* ============================================================
-   CONFIG / CLIENTE
+   ARRANQUE / IDENTIDAD
    ============================================================ */
-function getConfig(){
-  const url = store.get(LS.url) || (window.PORRA_CONFIG && window.PORRA_CONFIG.SUPABASE_URL) || "";
-  const key = store.get(LS.key) || (window.PORRA_CONFIG && window.PORRA_CONFIG.SUPABASE_ANON_KEY) || "";
-  return {url:url.trim(), key:key.trim()};
-}
 function initClient(){
-  const {url,key} = getConfig();
-  if(!url || !key) return false;
-  if(!window.supabase){ toast("No se pudo cargar Supabase", true); return false; }
-  sb = window.supabase.createClient(url, key, { realtime:{ params:{ eventsPerSecond:5 } } });
+  const cfg = window.PORRA_CONFIG||{};
+  if(!cfg.SUPABASE_URL || !cfg.SUPABASE_ANON_KEY || !window.supabase) return false;
+  sb = window.supabase.createClient(cfg.SUPABASE_URL, cfg.SUPABASE_ANON_KEY, {realtime:{params:{eventsPerSecond:5}}});
   return true;
 }
-
-/* ============================================================
-   ARRANQUE
-   ============================================================ */
 async function boot(){
-  if(!initClient()){ show("setup"); return; }
-  const code = store.get(LS.pool);
-  if(code){
-    const ok = await enterPool(code, /*silent*/true);
-    if(ok) return;
+  if(!initClient()){ document.body.innerHTML="<p style='padding:30px;text-align:center'>Falta configurar Supabase en config.js</p>"; return; }
+  const pid = localStorage.getItem(LS.pid);
+  if(pid){
+    const {data} = await sb.from("players").select().eq("id",pid).maybeSingle();
+    if(data){ me=data; await afterLogin(); return; }
   }
-  show("lobby");
+  show("login");
+}
+async function doLogin(){
+  const name=$("loginName").value.trim(); if(!name) return toast("Escribe tu nombre",true);
+  const rec=genCode();
+  const {data,error}=await sb.rpc("upsert_player",{p_name:name,p_recovery:rec});
+  if(error) return toast("Error: "+error.message,true);
+  me=data; localStorage.setItem(LS.pid,me.id); localStorage.setItem(LS.rec,me.recovery_code);
+  await afterLogin(); toast("¡Hola, "+esc(me.name)+"! Tu código: <b>"+me.recovery_code+"</b>",true);
+}
+async function doRecover(){
+  const rec=$("recoverCode").value.trim().toUpperCase(); if(!rec) return toast("Pega tu código",true);
+  const {data}=await sb.from("players").select().eq("recovery_code",rec).maybeSingle();
+  if(!data) return toast("Código no válido",true);
+  me=data; localStorage.setItem(LS.pid,me.id); localStorage.setItem(LS.rec,me.recovery_code);
+  await afterLogin(); toast("Cuenta recuperada 👋");
+}
+async function afterLogin(){ await refresh(); subscribe(); route(); }
+function route(){
+  if(!me) return;
+  if(!gameConfig || !gameConfig.started){ show("lobby"); renderLobby(); }
+  else { show("app"); render(); }
+}
+function renderLobby(){
+  const isAdmin = gameConfig && gameConfig.admin_id===me.id;
+  $("lobbyCount").textContent = players.length;
+  $("lobbyList").innerHTML = players.map(p=>`<div class="lb">
+    <span class="av">${ini(p.name)}</span>
+    <span class="nm">${esc(p.name)}${p.id===me.id?' <small>tú</small>':''}${gameConfig&&gameConfig.admin_id===p.id?' <small style="color:var(--gold)">organizador</small>':''}</span>
+  </div>`).join("");
+  $("lobbyAction").innerHTML = isAdmin
+    ? `<button class="btn gold" onclick="startGame()">🚀 Comenzar la porra</button>
+       <p class="muted small" style="margin-top:10px">Pulsa cuando estén todos. Al empezar se abren los pronósticos y los retos.</p>`
+    : `<p class="muted">Esperando a que el organizador pulse <b>Comenzar</b>…</p>`;
+}
+async function startGame(){
+  if(!confirm("¿Comenzar la porra para todos? A partir de ahora se puede pronosticar y retar.")) return;
+  const {error}=await sb.rpc("start_game",{p_player:me.id});
+  if(error) return toast("Error: "+error.message,true);
+  await refresh(); toast("¡Porra en marcha! 🚀",true);
 }
 
 /* ============================================================
-   POOLS (porras)
-   ============================================================ */
-function randomCode(){
-  const chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
-  let c=""; for(let i=0;i<5;i++) c+=chars[Math.floor(Math.random()*chars.length)];
-  return c;
-}
-
-async function createPool(){
-  const name = $("lobbyName").value.trim() || "Porra del Mundial 2026";
-  const start = Math.max(1, Math.floor(Number($("lobbyStart").value)||1000));
-  const myName = $("lobbyMyName").value.trim();
-  if(!myName) return toast("Escribe tu nombre", true);
-
-  let code, inserted=null;
-  for(let attempt=0; attempt<5 && !inserted; attempt++){
-    code = randomCode();
-    const {data,error} = await sb.from("pools")
-      .insert({code, name, starting_balance:start}).select().single();
-    if(!error){ inserted = data; break; }
-    if(error.code !== "23505") return toast("Error al crear la porra: "+error.message, true);
-  }
-  if(!inserted) return toast("No se pudo generar un código, reinténtalo", true);
-
-  pool = inserted;
-  const {data:player,error:e2} = await sb.from("players")
-    .insert({pool_id:pool.id, name:myName, balance:start}).select().single();
-  if(e2) return toast("Error al crear tu jugador: "+e2.message, true);
-
-  myId = player.id;
-  store.set(LS.pool, pool.code);
-  store.set(LS.player(pool.code), myId);
-  await afterEnter();
-  toast(`Porra creada · código ${pool.code} 🎉`);
-}
-
-async function joinPoolFromInput(){
-  const code = ($("joinCode").value||"").trim().toUpperCase();
-  if(!code) return toast("Escribe el código de la porra", true);
-  await enterPool(code);
-}
-
-async function enterPool(code, silent=false){
-  code = code.trim().toUpperCase();
-  const {data,error} = await sb.from("pools").select().eq("code", code).maybeSingle();
-  if(error){ if(!silent) toast("Error: "+error.message, true); return false; }
-  if(!data){ if(!silent) toast("No existe ninguna porra con ese código", true); return false; }
-  pool = data;
-  store.set(LS.pool, pool.code);
-  myId = store.get(LS.player(pool.code)) || null;
-  await afterEnter();
-  return true;
-}
-
-async function afterEnter(){
-  await refresh();
-  // si el jugador guardado ya no existe, pedir identidad
-  if(myId && !byId(myId)){ myId = null; store.del(LS.player(pool.code)); }
-  subscribe();
-  if(!myId){ renderPickPlayer(); show("pickplayer"); }
-  else { renderApp(); show("app"); }
-}
-
-function leavePool(){
-  if(channel){ sb.removeChannel(channel); channel=null; }
-  store.del(LS.pool);
-  pool=null; myId=null; players=[]; bets=[]; wagers=[];
-  show("lobby");
-  $("joinCode").value=""; $("lobbyName").value=""; $("lobbyMyName").value="";
-}
-
-/* ============================================================
-   DATOS + TIEMPO REAL
+   DATOS + REALTIME
    ============================================================ */
 async function refresh(){
-  if(!pool) return;
-  const [rp, rb, rw] = await Promise.all([
-    sb.from("players").select().eq("pool_id", pool.id),
-    sb.from("bets").select().eq("pool_id", pool.id).order("created_at",{ascending:true}),
-    sb.from("wagers").select().eq("pool_id", pool.id),
+  const [rcfg,rp,rm,rc,rt,rpr] = await Promise.all([
+    sb.from("config").select().maybeSingle(),
+    sb.from("players").select(),
+    sb.from("matches").select().order("kickoff",{ascending:true}),
+    sb.from("challenges").select(),
+    sb.from("challenge_takers").select(),
+    sb.from("predictions").select().eq("player_id", me.id),
   ]);
-  players = rp.data || [];
-  bets    = rb.data || [];
-  wagers  = rw.data || [];
-  if(!$("screen-app").classList.contains("hide")) renderApp();
-  if(!$("screen-pickplayer").classList.contains("hide")) renderPickPlayer();
+  gameConfig=rcfg.data||gameConfig;
+  players=rp.data||[]; matches=rm.data||[]; challenges=rc.data||[]; takers=rt.data||[];
+  pById={}; players.forEach(p=>pById[p.id]=p);
+  myPreds={}; (rpr.data||[]).forEach(p=>myPreds[p.match_id]=p);
+  if(me && pById[me.id]) me=pById[me.id];
+  route();
 }
-
+let refreshT=null;
 function subscribe(){
   if(channel){ sb.removeChannel(channel); channel=null; }
-  channel = sb.channel("pool-"+pool.id);
-  ["players","bets","wagers"].forEach(table=>{
-    channel.on("postgres_changes",
-      {event:"*", schema:"public", table, filter:"pool_id=eq."+pool.id},
-      ()=>refresh());
-  });
+  channel=sb.channel("porra");
+  ["config","players","matches","predictions","challenges","challenge_takers"].forEach(t=>
+    channel.on("postgres_changes",{event:"*",schema:"public",table:t},()=>{ clearTimeout(refreshT); refreshT=setTimeout(refresh,400); }));
   channel.subscribe();
 }
 
 /* ============================================================
-   RENDER — pantalla de identidad
+   RENDER
    ============================================================ */
-function renderPickPlayer(){
-  $("ppPoolName").textContent = pool.name;
-  $("ppPoolCode").textContent = pool.code;
-  const list = $("ppList");
-  if(players.length===0){
-    list.innerHTML = `<p class="muted small">Aún no hay nadie. Crea tu jugador abajo 👇</p>`;
-  }else{
-    list.innerHTML = players.map(p=>`
-      <div class="ppl-item">
-        <div class="avatar" style="width:34px;height:34px;font-size:.85rem">${initials(p.name)}</div>
-        <div class="nm">${escapeHtml(p.name)}<small>${fmt(p.balance)} 🪙</small></div>
-        <button class="btn ghost sm" onclick="claimPlayer('${p.id}')">Soy yo</button>
-      </div>`).join("");
-  }
+function render(){
+  if(!me) return;
+  $("avatar").textContent=ini(me.name);
+  $("userName").textContent=me.name;
+  $("userPts").textContent=fmt(me.points)+" 🪙";
+  if(tab==="matches") renderMatches(); else renderRank();
 }
-async function claimPlayer(id){
-  myId = id; store.set(LS.player(pool.code), id);
-  renderApp(); show("app"); toast("Hola de nuevo, "+byId(id).name+" 👋");
+function setTab(t){ tab=t;
+  $("viewMatches").style.display=t==="matches"?"":"none";
+  $("viewRank").style.display=t==="rank"?"":"none";
+  $("tabMatchesBtn").classList.toggle("on",t==="matches");
+  $("tabRankBtn").classList.toggle("on",t==="rank");
+  render();
 }
-async function createPlayer(){
-  const name = $("ppNewName").value.trim();
-  if(!name) return toast("Escribe tu nombre", true);
-  const {data,error} = await sb.from("players")
-    .insert({pool_id:pool.id, name, balance:pool.starting_balance}).select().single();
-  if(error) return toast("Error: "+error.message, true);
-  myId = data.id; store.set(LS.player(pool.code), myId);
-  await refresh(); renderApp(); show("app");
-  toast(`¡Bienvenido a la porra, ${name}! 🎉`);
+function setFilter(f,btn){ filter=f; document.querySelectorAll(".filters button").forEach(b=>b.classList.toggle("on",b===btn)); renderMatches(); }
+
+function renderMatches(){
+  let arr=matches.filter(m=>m.teams_known);
+  if(filter==="next") arr=arr.filter(m=>m.status==="scheduled");
+  else if(filter==="live") arr=arr.filter(m=>m.status==="live");
+  else arr=arr.filter(m=>m.status==="finished");
+  const el=$("matchList");
+  if(!arr.length){ el.innerHTML=`<div class="empty">No hay partidos aquí.</div>`; return; }
+  el.innerHTML=arr.map(matchCard).join("");
 }
+function dchip(name,p,isDraw){ const c=dclass(p),f=factor(p);
+  return `<div class="dchip ${c}"><div class="dk">${isDraw?"Empate":esc(name)}</div><div class="dv">×${f}</div><div class="dt">${dlabel(p)}</div></div>`; }
 
-/* ============================================================
-   RENDER — app principal
-   ============================================================ */
-function renderApp(){
-  $("poolTitle").textContent = pool.name;
-  $("poolCodeTag").textContent = "código " + pool.code;
-  renderTopbar();
-  renderBets();
-  renderLeaderboard();
-  renderPeople();
-  renderCatPills();
-}
-
-function renderTopbar(){
-  const u = me();
-  $("avatar").textContent = u ? initials(u.name) : "?";
-  $("userName").textContent = u ? u.name : "—";
-  $("userBal").textContent = u ? fmt(u.balance) : "0";
-}
-
-function renderBets(){
-  const list = $("betList");
-  let arr = [...bets].reverse();
-  if(betFilter==="open")     arr = arr.filter(b=>b.status==="open");
-  if(betFilter==="resolved") arr = arr.filter(b=>b.status==="resolved");
-  if(betFilter==="mine")     arr = arr.filter(b=>b.creator_id===myId);
-  if(arr.length===0){
-    list.innerHTML = emptyState("🎲","No hay apuestas aquí","Crea la primera en la pestaña <b>Crear</b>.");
-    return;
-  }
-  list.innerHTML = arr.map(renderBetCard).join("");
-}
-
-function renderBetCard(b){
-  return b.kind==="match" ? renderMatchCard(b) : renderFreeCard(b);
-}
-
-function cardShell(b, inner, extraChip){
-  const creator = byId(b.creator_id);
-  const betWagers = wagers.filter(w=>w.bet_id===b.id);
-  const totalPot = betWagers.reduce((s,w)=>s+Number(w.amount),0);
-  return `<div class="bet">
-    <div class="head">
-      <span class="chip cat">${extraChip}</span>
-      <span class="chip ${b.status}">${b.status==="open"?"Abierta":"Resuelta"}</span>
-    </div>
-    <h3>${escapeHtml(b.question)}</h3>
-    <div class="by">Creada por <b>${escapeHtml(creator?creator.name:"?")}</b> · bote ${fmt(totalPot)} 🪙</div>
-    ${inner}
-  </div>`;
-}
-
-/* ---- Pronóstico de partido (marcador escalonado) ---- */
-function renderMatchCard(b){
-  const myW = wagers.find(w=>w.bet_id===b.id && w.player_id===myId);
-  const betWagers = wagers.filter(w=>w.bet_id===b.id);
-  const oe = Number(b.odds_exact), ow = Number(b.odds_winner);
-
-  const score = b.status==="resolved"
-    ? `<div style="text-align:center; font-size:1.6rem; font-weight:800; margin:6px 0">
-         ${escapeHtml(b.team_a)} <span style="color:var(--gold)">${b.real_a} - ${b.real_b}</span> ${escapeHtml(b.team_b)}</div>`
-    : `<div style="text-align:center; font-size:1.15rem; font-weight:700; margin:6px 0">
-         ${escapeHtml(b.team_a)} <span class="muted">vs</span> ${escapeHtml(b.team_b)}</div>`;
-
-  const tiers = `<div class="tiers">
-      <span>🎯 Marcador exacto <b>×${oe.toFixed(2)}</b></span>
-      <span>✅ Solo ganador <b>×${ow.toFixed(2)}</b></span>
-    </div>`;
-
-  let mine = "";
-  if(myW){
-    mine = `<div class="mypick">Tu pronóstico: <b>${myW.pred_a}-${myW.pred_b}</b> · ${fmt(myW.amount)} 🪙</div>`;
-  }
-
-  let action = "";
-  if(b.status==="open"){
-    action = `<button class="btn sm" style="width:100%; margin-top:8px" onclick="openMatchWager('${b.id}')">${myW?"✏️ Cambiar mi pronóstico":"🎯 Pronosticar marcador"}</button>`;
-  }
-
-  // listado de pronósticos
-  let list = "";
-  if(betWagers.length){
-    list = `<div class="wager-list">${betWagers.map(w=>{
-      const p = byId(w.player_id);
-      let res="";
-      if(b.status==="resolved"){
-        if(w.pred_a===b.real_a && w.pred_b===b.real_b) res = ` <b style="color:var(--gold)">🎯 +${fmt(w.amount*oe)}</b>`;
-        else if(Math.sign(w.pred_a-w.pred_b)===Math.sign(b.real_a-b.real_b)) res = ` <b style="color:var(--green)">✅ +${fmt(w.amount*ow)}</b>`;
-        else res = ` <b style="color:var(--red)">-${fmt(w.amount)}</b>`;
-      }
-      return `<div class="w"><span><b>${escapeHtml(p?p.name:"?")}</b> → ${w.pred_a}-${w.pred_b}</span><span>${fmt(w.amount)} 🪙${res}</span></div>`;
-    }).join("")}</div>`;
-  }
-
-  let resolveCtl = "";
-  if(b.status==="open"){
-    resolveCtl = `<div class="row" style="margin-top:12px; align-items:center">
-      <input id="ra-${b.id}" type="number" min="0" placeholder="0" style="text-align:center">
-      <span style="flex:none">-</span>
-      <input id="rb-${b.id}" type="number" min="0" placeholder="0" style="text-align:center">
-      <button class="btn gold sm" style="flex:none" onclick="resolveMatch('${b.id}')">🏁 Resultado</button>
-    </div>`;
-  }
-
-  return cardShell(b, score+tiers+mine+action+list+resolveCtl, "🆚 Partido");
-}
-
-/* ---- Apuesta libre ---- */
-function renderFreeCard(b){
-  const cat = CATEGORIES.find(c=>c.id===b.category);
-  const myW = wagers.find(w=>w.bet_id===b.id && w.player_id===myId);
-  const betWagers = wagers.filter(w=>w.bet_id===b.id);
-
-  const opts = b.options.map(o=>{
-    const isWin = b.status==="resolved" && b.winning_option_id===o.id;
-    const isSel = myW && myW.option_id===o.id;
-    const onOpt = betWagers.filter(w=>w.option_id===o.id).reduce((s,w)=>s+Number(w.amount),0);
-    const cls = ["opt", isWin?"win":"", isSel?"sel":""].join(" ").trim();
-    const action = b.status==="open" ? `onclick="openWager('${b.id}','${o.id}')"` : "";
-    return `<div class="${cls}" ${action}>
-      <div style="flex:1">
-        <div class="lab">${escapeHtml(o.label)} ${isWin?"✅":""} ${isSel?"· <span style='color:var(--green)'>tu apuesta</span>":""}</div>
-        <div class="pot">${onOpt>0?fmt(onOpt)+" 🪙 apostado":"sin apuestas"}</div>
-      </div>
-      <div class="od">${Number(o.odds).toFixed(2)}<small>cuota</small></div>
-    </div>`;
-  }).join("");
-
-  let wagersHtml = "";
-  if(betWagers.length){
-    wagersHtml = `<div class="wager-list">${
-      betWagers.map(w=>{
-        const p = byId(w.player_id); const o = b.options.find(x=>x.id===w.option_id);
-        let res = "";
-        if(b.status==="resolved" && o){
-          const won = w.option_id===b.winning_option_id;
-          res = won ? ` <b style="color:var(--green)">+${fmt(Number(w.amount)*Number(o.odds))}</b>`
-                    : ` <b style="color:var(--red)">-${fmt(w.amount)}</b>`;
-        }
-        return `<div class="w"><span><b>${escapeHtml(p?p.name:"?")}</b> → ${escapeHtml(o?o.label:"?")}</span><span>${fmt(w.amount)} 🪙${res}</span></div>`;
-      }).join("")
-    }</div>`;
-  }
-
-  let resolveCtl = "";
-  if(b.status==="open"){
-    const optionsSel = b.options.map(o=>`<option value="${o.id}">${escapeHtml(o.label)}</option>`).join("");
-    resolveCtl = `<div class="row" style="margin-top:12px">
-      <select id="rsel-${b.id}">${optionsSel}</select>
-      <button class="btn gold sm" style="flex:none" onclick="resolveBet('${b.id}')">🏁 Resolver</button>
-    </div>`;
-  }
-
-  return cardShell(b, opts+wagersHtml+resolveCtl, cat?cat.label:b.category);
-}
-
-function renderLeaderboard(){
-  const el = $("leaderboard");
-  if(players.length===0){ el.innerHTML = emptyState("📊","Sin jugadores aún",""); return; }
-  const sorted = [...players].sort((a,b)=>Number(b.balance)-Number(a.balance));
-  el.innerHTML = sorted.map((p,i)=>{
-    const open = openExposure(p.id);
-    return `<div class="lb">
-      <div class="pos">${i===0?"🥇":i===1?"🥈":i===2?"🥉":(i+1)}</div>
-      <div class="avatar" style="width:34px;height:34px;font-size:.85rem">${initials(p.name)}</div>
-      <div class="nm">${escapeHtml(p.name)}${p.id===myId?' <span class="small" style="color:var(--green)">(tú)</span>':''}<small>${open>0?fmt(open)+" 🪙 en juego":"sin apuestas abiertas"}</small></div>
-      <div class="mn">${fmt(p.balance)} 🪙</div>
-    </div>`;
-  }).join("");
-}
-function openExposure(playerId){
-  const openBetIds = new Set(bets.filter(b=>b.status==="open").map(b=>b.id));
-  return wagers.filter(w=>w.player_id===playerId && openBetIds.has(w.bet_id))
-               .reduce((s,w)=>s+Number(w.amount),0);
-}
-
-function renderPeople(){
-  $("infoPoolName").textContent = pool.name;
-  $("infoPoolCode").textContent = pool.code;
-  const el = $("peopleList");
-  el.innerHTML = players.length===0
-    ? `<p class="muted small">Nadie todavía.</p>`
-    : players.map(p=>`
-      <div class="ppl-item">
-        <div class="avatar" style="width:34px;height:34px;font-size:.85rem">${initials(p.name)}</div>
-        <div class="nm">${escapeHtml(p.name)}<small>${fmt(p.balance)} 🪙${p.id===myId?" · tú":""}</small></div>
-      </div>`).join("");
-}
-
-function renderCatPills(){
-  $("catPills").innerHTML = CATEGORIES.map(c=>
-    `<button class="${c.id===createCat?"on":""}" onclick="pickCat('${c.id}')">${c.label}</button>`).join("");
-}
-
-function emptyState(icon,title,sub){
-  return `<div class="empty"><span class="big">${icon}</span><b>${title}</b><br><span class="small">${sub}</span></div>`;
-}
-
-/* ============================================================
-   CREAR APUESTA
-   ============================================================ */
-function pickKind(kind){
-  createKind = kind;
-  document.querySelectorAll("#kindPills button").forEach(b=> b.classList.toggle("on", b.dataset.kind===kind));
-  $("matchFields").classList.toggle("hide", kind!=="match");
-  $("freeFields").classList.toggle("hide", kind!=="free");
-}
-function pickCat(id){
-  createCat = id; renderCatPills();
-  const cat = CATEGORIES.find(c=>c.id===id);
-  buildOptRows(cat.opts.length ? cat.opts.map(l=>({label:l,odds:""})) : [{label:"",odds:""},{label:"",odds:""}]);
-}
-function buildOptRows(rows){ $("optRows").innerHTML = rows.map(r=>optRowHtml(r.label,r.odds)).join(""); }
-function optRowHtml(label="",odds=""){
-  return `<div class="optrow">
-    <input class="olab" placeholder="Opción" value="${escapeHtml(label)}">
-    <input class="ood" type="number" step="0.01" min="1.01" placeholder="cuota" value="${odds}">
-    <button class="x" onclick="this.parentElement.remove()">✕</button>
-  </div>`;
-}
-function addOptRow(){ $("optRows").insertAdjacentHTML("beforeend", optRowHtml()); }
-
-async function createBet(){
-  if(!me()) return toast("No se ha identificado tu jugador", true);
-  let payload;
-
-  if(createKind==="match"){
-    const a = $("cTeamA").value.trim(), b = $("cTeamB").value.trim();
-    const oe = parseFloat($("cOddsExact").value), ow = parseFloat($("cOddsWinner").value);
-    if(!a || !b) return toast("Escribe los dos equipos", true);
-    if(!(oe>1) || !(ow>1)) return toast("Las cuotas deben ser mayores que 1", true);
-    if(oe<=ow) return toast("La cuota del marcador exacto debe ser mayor que la de solo ganador", true);
-    payload = {
-      pool_id:pool.id, creator_id:myId, kind:"match", category:"partido",
-      question:`${a} vs ${b}`, team_a:a, team_b:b, odds_exact:oe, odds_winner:ow,
-      options:[], status:"open"
-    };
+function matchCard(m){
+  const pa=Number(m.p_a),pd=Number(m.p_draw),pb=Number(m.p_b);
+  const diff = (m.p_a!=null) ? `<div class="diff">${dchip(m.team_a,pa)}${dchip("Empate",pd,true)}${dchip(m.team_b,pb)}</div>` : "";
+  let center, body="";
+  if(m.status==="finished"){
+    center=`<div class="score"><span class="${m.score_a>m.score_b?'g':''}">${m.score_a}</span> - <span class="${m.score_b>m.score_a?'g':''}">${m.score_b}</span></div>`;
+    const pr=myPreds[m.id];
+    if(pr){
+      const exact=pr.pred_a===m.score_a&&pr.pred_b===m.score_b;
+      const tag=Number(pr.points)>0?`<span class="tagwin">+${fmt(pr.points)} pts ${exact?"🎯 exacto":"✅ ganador"}</span>`:`<span class="taglose">+0 · fallaste</span>`;
+      body=`<div class="mypick">Tu pronóstico <b>${pr.pred_a}-${pr.pred_b}</b> · ${tag}</div>`;
+    } else body=`<div class="muted small">No pronosticaste</div>`;
   } else {
-    const q = $("cQuestion").value.trim();
-    if(!q) return toast("Escribe la pregunta de la apuesta", true);
-    const rows = [...document.querySelectorAll("#optRows .optrow")];
-    const options = [];
-    for(const row of rows){
-      const label = row.querySelector(".olab").value.trim();
-      const odds = parseFloat(row.querySelector(".ood").value);
-      if(!label) continue;
-      if(!(odds>1)) return toast(`Pon una cuota válida (>1) en "${label}"`, true);
-      options.push({id:uid(), label, odds});
-    }
-    if(options.length<2) return toast("Necesitas al menos 2 opciones con cuota", true);
-    payload = { pool_id:pool.id, creator_id:myId, kind:"free", category:createCat, question:q, options, status:"open" };
+    center=`<div class="vs">vs</div>`;
+    body=predictionZone(m)+newChallengeSlot(m);
   }
-
-  const {error} = await sb.from("bets").insert(payload);
-  if(error) return toast("Error al publicar: "+error.message, true);
-
-  $("cQuestion").value=""; $("cTeamA").value=""; $("cTeamB").value=""; pickCat(createCat);
-  betFilter="open"; setFilterUI(); switchTab("bets");
-  toast("¡Apuesta publicada! 🎲");
+  const ko = m.kickoff ? new Date(m.kickoff).toLocaleString("es-ES",{day:"2-digit",month:"short",hour:"2-digit",minute:"2-digit"}) : "";
+  return `<div class="match">
+    <div class="mhead"><span class="stage">${STAGE[m.stage]||m.stage}${m.grp?" "+m.grp:""}${ko?" · "+ko:""}</span>
+      <span class="state ${m.status}">${m.status==="finished"?"Final":m.status==="live"?"En juego":"Próximo"}</span></div>
+    <div class="teams">
+      <div class="team"><span class="flag">${flag(m.team_a)}</span><span class="tname">${esc(m.team_a)}</span></div>
+      ${center}
+      <div class="team"><span class="flag">${flag(m.team_b)}</span><span class="tname">${esc(m.team_b)}</span></div>
+    </div>
+    ${diff}${body}${challengesFor(m)}
+  </div>`;
 }
 
-/* ============================================================
-   APOSTAR / RESOLVER  (vía funciones atómicas en Supabase)
-   ============================================================ */
-async function openWager(betId, optId){
-  const u = me(); if(!u) return toast("No identificado", true);
-  const bet = bets.find(b=>b.id===betId); if(!bet || bet.status!=="open") return;
-  const opt = bet.options.find(o=>o.id===optId);
-  const existing = wagers.find(w=>w.bet_id===betId && w.player_id===myId);
-  if(existing){
-    const prev = bet.options.find(o=>o.id===existing.option_id);
-    if(!confirm(`Ya apostaste ${fmt(existing.amount)} 🪙 a "${prev?prev.label:"?"}". ¿Cambiar tu apuesta? (se te devuelve y apuestas de nuevo)`)) return;
+/* ---------- pronóstico ---------- */
+function predictionZone(m){
+  const pr=myPreds[m.id];
+  if(!editing || editing.matchId!==m.id){
+    if(pr) return `<div class="mypick">Tu pronóstico: <b>${pr.pred_a}-${pr.pred_b}</b> &nbsp;<button class="acc" style="background:transparent;color:var(--muted);border:1px solid var(--line)" onclick="startEdit('${m.id}')">Cambiar</button></div>`;
+    return `<button class="btn gold sm" onclick="startEdit('${m.id}')">🎯 Poner mi marcador</button>`;
   }
-  const avail = Number(u.balance) + (existing?Number(existing.amount):0);
-  const raw = prompt(`Apostar a: "${opt.label}" (cuota ${Number(opt.odds).toFixed(2)})\nSi aciertas ganas lo apostado × cuota.\n\nSaldo disponible: ${fmt(avail)} 🪙\n¿Cuánto apuestas?`, "");
-  if(raw===null) return;
-  const amount = Math.floor(Number(raw));
-  if(!(amount>0)) return toast("Cantidad no válida", true);
-  if(amount>avail) return toast("No tienes saldo suficiente", true);
-
-  const {error} = await sb.rpc("place_wager",
-    {p_bet_id:betId, p_player_id:myId, p_option_id:optId, p_amount:amount});
-  if(error) return toast("Error: "+error.message, true);
-  await refresh();
-  toast(`Apostaste ${fmt(amount)} 🪙 · posible premio ${fmt(amount*Number(opt.odds))} 🪙`);
+  const ea=editing.a,eb=editing.b;
+  const out=ea>eb?Number(m.p_a):ea<eb?Number(m.p_b):Number(m.p_draw);
+  const f=factor(out);
+  return `<div class="predbox">
+    <div class="stepper">
+      <div class="stcol"><span class="sn">${esc(m.team_a)}</span><div class="stctl"><button onclick="step(-1,'a')">−</button><span class="num">${ea}</span><button onclick="step(1,'a')">+</button></div></div>
+      <span class="stdash">–</span>
+      <div class="stcol"><span class="sn">${esc(m.team_b)}</span><div class="stctl"><button onclick="step(-1,'b')">−</button><span class="num">${eb}</span><button onclick="step(1,'b')">+</button></div></div>
+    </div>
+    <div class="preview">Si lo clavas: <b>+${fmt(50*f)}</b> · si solo aciertas quién gana: <b>+${fmt(20*f)}</b><br><span style="opacity:.8">(${dlabel(out)} ×${f})</span></div>
+    <div class="row2"><button class="btn ghost sm" onclick="cancelEdit()">Cancelar</button><button class="btn gold sm" onclick="savePred('${m.id}')">Guardar</button></div>
+  </div>`;
+}
+function startEdit(id){ const pr=myPreds[id]; editing={matchId:id,a:pr?pr.pred_a:1,b:pr?pr.pred_b:0}; render(); }
+function cancelEdit(){ editing=null; render(); }
+function step(d,side){ editing[side]=Math.max(0,editing[side]+d); render(); }
+async function savePred(id){
+  const {error}=await sb.rpc("place_prediction",{p_match:id,p_player:me.id,p_a:editing.a,p_b:editing.b});
+  editing=null;
+  if(error) return toast("Error: "+error.message,true);
+  await refresh(); toast("Pronóstico guardado 🎯");
 }
 
-async function resolveBet(betId){
-  const bet = bets.find(b=>b.id===betId); if(!bet || bet.status!=="open") return;
-  const winId = $("rsel-"+betId).value;
-  const winOpt = bet.options.find(o=>o.id===winId);
-  if(!confirm(`Resolver "${bet.question}"\nGanadora: ${winOpt.label}\n\nSe pagarán los premios. No se puede deshacer.`)) return;
-  const {error} = await sb.rpc("resolve_bet", {p_bet_id:betId, p_winning_option_id:winId});
-  if(error) return toast("Error: "+error.message, true);
-  await refresh();
-  toast("Apuesta resuelta y premios pagados 🏆");
+/* ---------- retos ---------- */
+const MARKETS={
+  "1x2":{sides:["1","X","2"]}, "ou":{sides:["over","under"],lines:[1.5,2.5,3.5]},
+  "btts":{sides:["si","no"]}, "oddeven":{sides:["par","impar"]},
+  "exact":{sides:["score"]}, "scorer":{sides:["player"]}
+};
+function challengesFor(m){
+  const list=challenges.filter(c=>c.match_id===m.id && c.status!=="void");
+  if(!list.length) return "";
+  const started=m.status!=="scheduled";
+  return `<div class="duel-h">Retos</div>`+list.map(c=>{
+    const L=Math.round(c.stake*(c.odds-1));
+    const myT=takers.filter(t=>t.challenge_id===c.id);
+    const iAccepted=myT.some(t=>t.player_id===me.id);
+    const mine=c.creator_id===me.id;
+    const full=c.max_takers>0 && myT.length>=c.max_takers;
+    const cupo=`${myT.length}${c.max_takers>0?`/${c.max_takers}`:""}`;
+    const names=myT.length?` (${myT.map(t=>t.player_id===me.id?"Tú":(pById[t.player_id]?pById[t.player_id].name:"?")).join(", ")})`:"";
+    const cr=pById[c.creator_id];
+    let action;
+    if(c.status==="resolved"){
+      if(mine) action=c.creator_won?`<span class="tagwin">ganaste ×${myT.length}</span>`:`<span class="taglose">perdiste</span>`;
+      else if(iAccepted) action=(!c.creator_won)?`<span class="tagwin">ganaste</span>`:`<span class="taglose">perdiste</span>`;
+      else action=`<small>resuelto</small>`;
+    } else if(mine){ action=`<span class="who2" style="font-size:.72rem;color:var(--muted)">tu reto · ${cupo} rivales</span>`; }
+    else if(iAccepted){ action=`<span class="who2" style="font-size:.72rem;color:var(--good)">aceptado ✓</span>`; }
+    else if(started){ action=`<small>cerrado</small>`; }
+    else if(full){ action=`<small style="color:var(--surprise)">completo</small>`; }
+    else { action=`<button class="acc" onclick="accept('${c.id}')">Aceptar · arriesgas ${fmt(L)}</button>`; }
+    return `<div class="duel">
+      <span class="dinfo"><b>${esc(cr?cr.name:"?")}${mine?" (tú)":""}</b>: ${MK_LABEL[c.market]} · <b>${esc(selName(m,c.market,c.selection,c.line))}</b><br>
+        <small>cuota ×${Number(c.odds).toFixed(2)} · rivales ${cupo}${esc(names)}</small></span>
+      <span class="pill">${fmt(c.stake)} pts</span>${action}
+    </div>`;
+  }).join("");
+}
+function newChallengeSlot(m){
+  if(!creating || creating.matchId!==m.id) return `<button class="btn ghost sm" style="margin-top:8px" onclick="startChallenge('${m.id}')">⚔️ Retar a otros (1 vs varios)</button>`;
+  const mk=creating.market, conf=MARKETS[mk];
+  const marketBtns=Object.keys(MARKETS).map(k=>`<button class="${k===mk?'on':''}" onclick="setMarket('${m.id}','${k}')">${MK_LABEL[k]}</button>`).join("");
+  let lineUI=""; if(mk==="ou") lineUI=`<label>Línea de goles</label><div class="seg">${conf.lines.map(L=>`<button class="${L===creating.line?'on':''}" onclick="setLine(${L})">${L}</button>`).join("")}</div>`;
+  let selUI;
+  if(mk==="exact"){
+    selUI=`<label>Tu marcador</label><div class="stepper" style="margin-bottom:0">
+      <div class="stcol"><span class="sn">${esc(m.team_a)}</span><div class="stctl"><button onclick="exStep(-1,'a')">−</button><span class="num">${creating.exa}</span><button onclick="exStep(1,'a')">+</button></div></div>
+      <span class="stdash">–</span>
+      <div class="stcol"><span class="sn">${esc(m.team_b)}</span><div class="stctl"><button onclick="exStep(-1,'b')">−</button><span class="num">${creating.exb}</span><button onclick="exStep(1,'b')">+</button></div></div></div>`;
+  } else if(mk==="scorer"){
+    const sq=squadCache[m.id]||{a:[],b:[]};
+    const opt=l=>l.map(p=>`<option ${p===creating.sel?"selected":""}>${esc(p)}</option>`).join("");
+    selUI=`<label>¿Quién marca? (convocatoria)</label><select class="stake scorer-sel" onchange="setScorer(this.value)">
+      <optgroup label="${esc(m.team_a)}">${opt(sq.a)}</optgroup><optgroup label="${esc(m.team_b)}">${opt(sq.b)}</optgroup></select>`;
+  } else {
+    selUI=`<label>Tu apuesta</label><div class="seg">${conf.sides.map(s=>`<button class="${s===creating.sel?'on':''}" onclick="setSel('${s}')">${esc(selName(m,mk,s,creating.line))}</button>`).join("")}</div>`;
+  }
+  const odds=creating.odds||"…";
+  const liab=creating.odds?Math.round(creating.stake*(creating.odds-1)):0;
+  return `<div class="cform">
+    <label>Tipo de reto</label><div class="seg">${marketBtns}</div>
+    ${lineUI}${selUI}
+    <label>Cuota (sugerida; editable)</label><input class="stake" type="number" step="0.01" min="1.01" value="${creating.odds||""}" oninput="setOdds(this.value)">
+    <label>Puntos que te juegas</label><input class="stake" type="number" min="1" value="${creating.stake}" oninput="setStake(this.value)">
+    <label>¿Cuántos pueden aceptar?</label><div class="seg">${[1,2,3,5,0].map(n=>`<button class="${n===creating.max?'on':''}" onclick="setMax(${n})">${n===0?"∞":n}</button>`).join("")}</div>
+    <div class="cmeta">Cuota <b>×${typeof odds==="number"?odds.toFixed(2):odds}</b> · ganas <b>+${fmt(liab)}</b> por cada rival que pierda contra ti · arriesgas <b>${fmt(creating.stake)}</b> por cada uno${creating.max?` · máx ${creating.max}`:" · sin límite"}</div>
+    <div class="row2"><button class="btn ghost sm" onclick="cancelChallenge()">Cancelar</button><button class="btn gold sm" onclick="postChallenge('${m.id}')">Publicar reto</button></div>
+  </div>`;
+}
+async function startChallenge(id){
+  creating={matchId:id,market:"1x2",sel:"1",line:2.5,exa:1,exb:0,stake:50,max:3,odds:null};
+  await loadSquads(id); await refreshOdds(); render();
+}
+function cancelChallenge(){ creating=null; render(); }
+async function loadSquads(matchId){
+  if(squadCache[matchId]) return;
+  const m=matches.find(x=>x.id===matchId); if(!m) return;
+  const {data}=await sb.from("team_squads").select("team,player").in("team",[m.team_a,m.team_b]);
+  const a=(data||[]).filter(r=>r.team===m.team_a).map(r=>r.player);
+  const b=(data||[]).filter(r=>r.team===m.team_b).map(r=>r.player);
+  squadCache[matchId]={a,b};
+}
+function curSel(){ return creating.market==="exact"?`${creating.exa}-${creating.exb}`:creating.sel; }
+async function refreshOdds(){
+  const c=creating; if(!c) return;
+  const {data,error}=await sb.rpc("suggest_odds",{p_match:c.matchId,p_market:c.market,p_selection:curSel(),p_line:c.market==="ou"?c.line:null});
+  if(!error && data) c.odds=Number(data);
+  render();
+}
+async function setMarket(id,mk){ creating.market=mk;
+  if(mk==="scorer"){ await loadSquads(id); creating.sel=(squadCache[id].a[0]||squadCache[id].b[0]||""); }
+  else if(mk!=="exact") creating.sel=MARKETS[mk].sides[0];
+  await refreshOdds();
+}
+async function setSel(s){ creating.sel=s; await refreshOdds(); }
+async function setLine(L){ creating.line=L; await refreshOdds(); }
+async function setScorer(n){ creating.sel=n; await refreshOdds(); }
+async function exStep(d,side){ const k=side==="a"?"exa":"exb"; creating[k]=Math.max(0,creating[k]+d); await refreshOdds(); }
+function setStake(v){ creating.stake=Math.max(1,Math.floor(+v||1)); }
+function setOdds(v){ creating.odds=Math.max(1.01,Number(v)||1.01); }
+function setMax(n){ creating.max=n; render(); }
+async function postChallenge(id){
+  const c=creating;
+  if(!(c.odds>1)) return toast("Cuota no válida",true);
+  if(c.stake>me.points) return toast("No tienes tantos puntos",true);
+  const {error}=await sb.rpc("create_challenge",{p_match:id,p_creator:me.id,p_market:c.market,p_line:c.market==="ou"?c.line:null,p_selection:curSel(),p_odds:c.odds,p_stake:c.stake,p_max:c.max});
+  creating=null;
+  if(error) return toast("Error: "+error.message,true);
+  await refresh(); toast("Reto publicado ⚔️ — ya pueden aceptarlo");
+}
+async function accept(id){
+  const {error}=await sb.rpc("accept_challenge",{p_challenge:id,p_taker:me.id});
+  if(error) return toast("Error: "+error.message,true);
+  await refresh(); toast("Reto aceptado ⚔️");
 }
 
-/* ---- Pronóstico de partido ---- */
-async function openMatchWager(betId){
-  const u = me(); if(!u) return toast("No identificado", true);
-  const bet = bets.find(b=>b.id===betId); if(!bet || bet.status!=="open") return;
-  const existing = wagers.find(w=>w.bet_id===betId && w.player_id===myId);
-
-  const rawScore = prompt(`Tu marcador para ${bet.team_a} vs ${bet.team_b}\n(ejemplo: 2-1)`,
-    existing ? `${existing.pred_a}-${existing.pred_b}` : "");
-  if(rawScore===null) return;
-  const m = rawScore.trim().match(/^(\d+)\s*[-:]\s*(\d+)$/);
-  if(!m) return toast("Marcador no válido. Usa el formato 2-1", true);
-  const pa = parseInt(m[1],10), pb = parseInt(m[2],10);
-
-  const avail = Number(u.balance) + (existing?Number(existing.amount):0);
-  const oe = Number(bet.odds_exact), ow = Number(bet.odds_winner);
-  const raw = prompt(`Marcador ${pa}-${pb} en ${bet.team_a} vs ${bet.team_b}\n\n🎯 Si aciertas el marcador exacto: ×${oe.toFixed(2)}\n✅ Si aciertas solo el ganador: ×${ow.toFixed(2)}\n\nSaldo disponible: ${fmt(avail)} 🪙\n¿Cuánto apuestas?`, "");
-  if(raw===null) return;
-  const amount = Math.floor(Number(raw));
-  if(!(amount>0)) return toast("Cantidad no válida", true);
-  if(amount>avail) return toast("No tienes saldo suficiente", true);
-
-  const {error} = await sb.rpc("place_match_wager",
-    {p_bet_id:betId, p_player_id:myId, p_pred_a:pa, p_pred_b:pb, p_amount:amount});
-  if(error) return toast("Error: "+error.message, true);
-  await refresh();
-  toast(`Pronóstico ${pa}-${pb} · ${fmt(amount)} 🪙 · exacto paga ${fmt(amount*oe)} 🪙`);
+/* ---------- clasificación ---------- */
+function renderRank(){
+  const sorted=[...players].sort((a,b)=>Number(b.points)-Number(a.points));
+  $("viewRank").innerHTML=sorted.map((p,i)=>`<div class="lb ${p.id===me.id?'me':''}">
+    <span class="pos">${i===0?"🥇":i===1?"🥈":i===2?"🥉":i+1}</span>
+    <span class="av">${ini(p.name)}</span>
+    <span class="nm">${esc(p.name)}${p.id===me.id?' <small>tú</small>':''}</span>
+    <span class="pts">${fmt(p.points)} pts</span></div>`).join("")
+    || `<div class="empty">Aún no hay jugadores.</div>`;
 }
 
-async function resolveMatch(betId){
-  const bet = bets.find(b=>b.id===betId); if(!bet || bet.status!=="open") return;
-  const ra = parseInt($("ra-"+betId).value,10), rb = parseInt($("rb-"+betId).value,10);
-  if(!(ra>=0) || !(rb>=0)) return toast("Mete el resultado real (ej. 2 y 1)", true);
-  if(!confirm(`Resultado de ${bet.team_a} vs ${bet.team_b}: ${ra}-${rb}\n\nSe pagarán los premios (exacto y solo-ganador). No se puede deshacer.`)) return;
-  const {error} = await sb.rpc("resolve_match", {p_bet_id:betId, p_real_a:ra, p_real_b:rb});
-  if(error) return toast("Error: "+error.message, true);
-  await refresh();
-  toast("Partido resuelto y premios pagados 🏆");
-}
+/* ---------- código de recuperación ---------- */
+function showMyCode(){ const c=localStorage.getItem(LS.rec); if(c){ navigator.clipboard?.writeText(c); toast("Tu código: <b>"+c+"</b> (copiado). Guárdalo para entrar desde otro móvil.",true); } }
 
-/* ============================================================
-   CONFIG (pantalla de ajuste de claves)
-   ============================================================ */
-function saveConfigFromUI(){
-  const url = $("cfgUrl").value.trim();
-  const key = $("cfgKey").value.trim();
-  if(!url || !key) return toast("Rellena los dos campos", true);
-  store.set(LS.url, url);
-  store.set(LS.key, key);
-  if(initClient()){ toast("Conectado ✔️"); boot(); }
-}
-
-/* ============================================================
-   NAV
-   ============================================================ */
-function switchTab(tab){
-  activeTab = tab;
-  ["bets","create","rank","people"].forEach(t=> $("tab-"+t).classList.toggle("hide", t!==tab));
-  document.querySelectorAll("#tabs button").forEach(b=> b.classList.toggle("active", b.dataset.tab===tab));
-  window.scrollTo({top:0,behavior:"smooth"});
-}
-function setFilterUI(){
-  document.querySelectorAll("#tab-bets .filterbar button").forEach(b=> b.classList.toggle("on", b.dataset.f===betFilter));
-}
-function copyCode(){
-  navigator.clipboard?.writeText(pool.code).then(()=>toast("Código copiado: "+pool.code));
-}
-
-/* ============================================================
-   EVENTOS
-   ============================================================ */
+/* ---------- wiring ---------- */
 function wire(){
-  $("cfgSave").addEventListener("click", saveConfigFromUI);
-
-  $("createPoolBtn").addEventListener("click", createPool);
-  $("joinPoolBtn").addEventListener("click", joinPoolFromInput);
-
-  $("ppCreateBtn").addEventListener("click", createPlayer);
-  $("ppNewName").addEventListener("keydown", e=>{ if(e.key==="Enter") createPlayer(); });
-  $("ppLeave").addEventListener("click", leavePool);
-
-  document.querySelectorAll("#tabs button").forEach(b=> b.addEventListener("click", ()=>switchTab(b.dataset.tab)));
-  document.querySelectorAll("#tab-bets .filterbar button").forEach(b=>
-    b.addEventListener("click", ()=>{ betFilter=b.dataset.f; setFilterUI(); renderBets(); }));
-
-  document.querySelectorAll("#kindPills button").forEach(b=> b.addEventListener("click", ()=>pickKind(b.dataset.kind)));
-  $("addOpt").addEventListener("click", addOptRow);
-  $("createBet").addEventListener("click", createBet);
-  $("leaveBtn").addEventListener("click", leavePool);
-  $("copyCodeBtn").addEventListener("click", copyCode);
-
-  // exponer para handlers inline
-  window.openWager=openWager; window.resolveBet=resolveBet;
-  window.openMatchWager=openMatchWager; window.resolveMatch=resolveMatch;
-  window.pickCat=pickCat; window.claimPlayer=claimPlayer;
-
-  // prefill config si ya existe
-  const {url,key} = getConfig();
-  $("cfgUrl").value = url; $("cfgKey").value = key;
-
-  pickKind(createKind);
-  pickCat(createCat);
+  $("loginBtn").addEventListener("click",doLogin);
+  $("loginName").addEventListener("keydown",e=>{if(e.key==="Enter")doLogin();});
+  $("recoverBtn").addEventListener("click",doRecover);
+  $("myCodeBtn").addEventListener("click",showMyCode);
+  $("tabMatchesBtn").addEventListener("click",()=>setTab("matches"));
+  $("tabRankBtn").addEventListener("click",()=>setTab("rank"));
+  document.querySelectorAll(".filters button").forEach(b=>b.addEventListener("click",()=>setFilter(b.dataset.f,b)));
+  Object.assign(window,{startEdit,cancelEdit,step,savePred,startChallenge,cancelChallenge,setMarket,setSel,setLine,setScorer,exStep,setStake,setOdds,setMax,postChallenge,accept,startGame});
 }
-
-document.addEventListener("DOMContentLoaded", ()=>{ wire(); boot(); });
+document.addEventListener("DOMContentLoaded",()=>{ wire(); boot(); });
