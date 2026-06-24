@@ -1,237 +1,189 @@
 # Porra del Mundial 2026 — Rediseño del sistema de apuestas
 
-**Fecha:** 2026-06-24
-**Estado:** Diseño aprobado (pendiente de revisión final del spec)
+**Fecha:** 2026-06-24 (rev. 2 — modelo final tras validar con demo interactiva)
+**Estado:** Diseño aprobado vía demo (pendiente de regenerar el plan de implementación)
 **Repo:** Layos85/seguimiento-habitos · rama `claude/mundial-betting-pool-5a0v1d`
+**Demo de referencia:** artifact `porra-mundial-demo` (offline, refleja este modelo)
 
 ---
 
 ## 1. Resumen
 
-Rediseño del juego: pasa de "porras por código con dinero ficticio y apuestas creadas a mano"
-a una **liga global única** donde **todos los partidos del Mundial 2026 aparecen y se
-actualizan solos**. El **partido** es la entidad central. Cada usuario **pronostica el
-marcador de cada partido** (gana puntos por acertar) y puede **retar a otros usuarios 1
-contra 1** sobre mercados del partido, robándose puntos entre ellos.
+Liga global única donde **todos los partidos del Mundial 2026 aparecen y se actualizan
+solos**. El **partido** es la entidad central. Dos capas de juego, **una sola moneda: puntos**
+(la "hucha", inicial **1000**):
 
-**Una sola moneda: puntos** (la "hucha" de cada usuario). Hucha inicial = **1000 puntos**.
+1. **Porra base** — cada usuario pronostica el marcador de cada partido. Gana puntos por
+   acertar; **más cuanto mayor es la sorpresa**.
+2. **Retos** — un usuario crea una apuesta sobre un partido (con cuota de casa) que **pueden
+   aceptar varios rivales** (cupo configurable); el creador gana/pierde puntos contra cada
+   rival por separado.
 
 ---
 
 ## 2. Objetivos (criterios verificables)
 
 1. Los partidos del Mundial 2026 se cargan automáticamente desde una API, sin meterlos a mano.
-2. Los resultados y el avance del cuadro eliminatorio se actualizan solos, aunque nadie tenga
-   la web abierta.
-3. Cada usuario puede poner un marcador a cada partido y recibe puntos automáticamente al
-   finalizar según acierte marcador exacto o solo ganador.
-4. Un usuario puede crear un reto 1v1 sobre un mercado de un partido; otro lo acepta; al
-   finalizar, el perdedor transfiere puntos al ganador (suma cero).
-5. Hay una única clasificación global por puntos.
+2. Resultados y emparejamientos del cuadro se actualizan solos (cron), aunque nadie tenga la
+   web abierta.
+3. Cada usuario pone un marcador a cada partido y recibe puntos automáticamente al finalizar,
+   con multiplicador por dificultad (sorpresa).
+4. Un usuario crea un reto sobre un mercado de un partido, **define cuántos pueden aceptarlo**,
+   y varios rivales lo aceptan; al finalizar, los puntos se mueven entre creador y cada rival
+   (suma cero por par).
+5. Las cuotas de los retos están **alineadas con las casas de apuestas** donde existen (vía API
+   de odds), con modelo propio de respaldo.
+6. Una única clasificación global por puntos.
 
 ---
 
 ## 3. Arquitectura
 
-- **Frontend:** web estática (HTML/JS) en GitHub Pages. Se mantiene el stack actual.
-- **Backend de datos:** Supabase (Postgres + Realtime). Se mantiene.
-- **Sincronización automática (nuevo):** función programada con **pg_cron** en Supabase
-  (cada ~5 min) que llama a la API de fútbol y vuelca/actualiza partidos, resultados y
-  emparejamientos en la tabla `matches`. Como la actualización ocurre en la propia BD, la web
-  la ve por Realtime sin intervención de nadie.
-- **Fuente de datos:** **openfootball/worldcup.json** (JSON público, sin API key, calendario
-  completo 2026 incluyendo eliminatorias que se rellenan). Plan B: football-data.org (plan
-  gratis, 10 req/min).
-- **Cuadro eliminatorio:** NO se calcula en la app; se **espeja** lo que diga la API según
-  salen los resultados. Los partidos de eliminatoria existen desde el principio con equipos
-  "por determinar" (ej. "1º Grupo A") y se vuelven jugables cuando la API fija los equipos.
+- **Frontend:** web estática (HTML/JS) en GitHub Pages.
+- **Datos:** Supabase (Postgres + Realtime).
+- **Sincronización (cron):** Edge Function (Deno/TS) programada con pg_cron, cada ~5 min:
+  vuelca partidos/resultados, liquida lo finalizado. La web lo ve por Realtime.
+- **Fuentes de datos externas:**
+  - **Calendario + resultados + goleadores:** `openfootball/worldcup.json` (JSON público, sin
+    key). Estructura verificada: `matches[]` con `round/date/time/team1/team2/score.ft/group/
+    ground/num` y `goals1[]/goals2[]` (goleador + minuto). 104 partidos.
+  - **Convocatorias (para el mercado Goleador):** `openfootball/worldcup.squads.json` (48
+    selecciones × 26 jugadores).
+  - **Cuotas reales:** **The Odds API** (plan gratis 500 créditos/mes). Cubre mercados
+    estándar de fútbol (1X2, más/menos, ambos marcan). Se consultan **1-2 veces al día** para
+    los próximos partidos y se **cachean**; como la cuota de un reto se congela al crearlo, no
+    hace falta tiempo real. Cobertura del Mundial 2026 a verificar en implementación; si falla,
+    se usa el modelo propio (abajo) como fallback.
 
-> **Riesgo (frescura de datos):** openfootball se actualiza por *commits* de la comunidad, así
-> que un resultado puede tardar minutos/horas en aparecer (no es live-score al segundo). Es
-> aceptable para un juego entre amigos (los puntos se liquidan igual, solo más tarde). Si se
-> quiere mayor inmediatez, el plan B (football-data.org) da resultados más rápidos a cambio de
-> gestionar una API key y su límite de 10 req/min. La elección final de fuente se valida en el
-> plan de implementación.
+### Cuotas: híbrido real + modelo
+| Mercado | Cuota |
+|---|---|
+| Resultado (1X2), Más/Menos (1.5/2.5/3.5), Ambos marcan | **Real** (The Odds API), modelo de respaldo |
+| Par/Impar, Marcador exacto, Goleador | **Modelo propio** (las casas no las dan en plan gratis) |
 
-### Mecanismo del cron
-- `pg_cron` programa una llamada periódica a una función SQL/Edge.
-- La función usa `pg_net` (HTTP desde Postgres) para descargar el JSON de openfootball.
-- Hace *upsert* en `matches` por `ext_id`: actualiza `status`, `score_a`, `score_b`,
-  `team_a`, `team_b`, `kickoff`.
-- Tras el upsert, **liquida** lo que haya quedado finalizado y sin liquidar:
-  reparte puntos de `predictions` y resuelve `challenges` aceptados.
-- Idempotente: liquidar dos veces el mismo partido no duplica puntos (flag `settled`).
+**Modelo propio de cuotas (respaldo/mercados sin odds reales):** probabilidad 1X2 por fuerza
+Elo + modelo de goles Poisson (λ por equipo según fuerza) para más/menos, ambos marcan, exacto
+y goleador, con **margen de casa ~6%**. (Validado en la demo.)
+
+### id estable de partido
+- Eliminatorias traen `num` → `n{num}` (estable aunque el equipo sea aún "W74"/"2A").
+- Grupos no traen `num` → `{date}__{ground}`.
 
 ---
 
 ## 4. Modelo de datos (Supabase)
 
-> Sustituye el modelo actual (`pools`, `bets`, `wagers` por código). Se rehace el esquema.
+### `config` (fila única)
+`start_points=1000`, `pts_exact=50`, `pts_winner=20`, umbrales/factores de dificultad
+(`thr_fav=0.50`, `thr_even=0.30`, `fac_even=1.5`, `fac_surprise=3`), `odds_margin=0.94`.
 
-### `players` (global, sin pools)
-| campo | tipo | nota |
-|---|---|---|
-| id | uuid PK | |
-| name | text | nombre visible |
-| recovery_code | text unique | código corto para recuperar identidad en otro dispositivo |
-| points | numeric | la hucha; default 1000 |
-| created_at | timestamptz | |
+### `team_strength` (48) — rating Elo por selección (modelo de cuotas + dificultad).
+### `team_squads` — `team`, `player`, `pos` (de squads.json; alimenta el desplegable Goleador).
 
-### `matches` (lo llena el cron)
-| campo | tipo | nota |
-|---|---|---|
-| id | uuid PK | |
-| ext_id | text unique | id del partido en la API |
-| stage | text | grupos / dieciseisavos / octavos / cuartos / semis / final |
-| grp | text | grupo (A..L) si aplica |
-| team_a | text | equipo o placeholder ("1º Grupo A") |
-| team_b | text | |
-| teams_known | boolean | true cuando ambos equipos son selecciones reales |
-| kickoff | timestamptz | |
-| status | text | scheduled / live / finished |
-| score_a | integer | null hasta que haya resultado |
-| score_b | integer | |
-| settled | boolean | true cuando ya se repartieron puntos |
+### `players` — `id`, `name`, `recovery_code`, `points` (default 1000), `created_at`.
 
-### `predictions` (porra base — marcador)
-| campo | tipo | nota |
-|---|---|---|
-| id | uuid PK | |
-| match_id | uuid FK | |
-| player_id | uuid FK | |
-| pred_a | integer | marcador previsto local |
-| pred_b | integer | marcador previsto visitante |
-| created_at / updated_at | timestamptz | editable hasta el kickoff |
+### `matches` — `id`, `ext_id` (unique), `stage`, `grp`, `team_a`, `team_b`, `teams_known`,
+`kickoff`, `status` (scheduled/live/finished), `score_a`, `score_b`, `scorers` (jsonb, nombres
+de goleadores), `p_a`, `p_draw`, `p_b` (probabilidades congeladas al conocerse los equipos),
+`odds` (jsonb cacheado de The Odds API por mercado), `settled`.
 
-Restricción única `(match_id, player_id)` — un pronóstico por jugador y partido.
+### `predictions` (porra base) — `match_id`, `player_id`, `pred_a`, `pred_b`, `points`.
+Único `(match_id, player_id)`. Editable hasta el kickoff.
 
-### `challenges` (retos 1v1 — apuestas por fuera)
-| campo | tipo | nota |
-|---|---|---|
-| id | uuid PK | |
-| match_id | uuid FK | |
-| market | text | `1x2` / `ou25` (más/menos 2.5) / `btts` (ambos marcan) |
-| selection | text | lado que defiende el creador (ej. `1`, `X`, `2`; `over`/`under`; `si`/`no`) |
-| odds | numeric | cuota decimal acordada por el creador (sugerida por tabla de fuerza) |
-| stake | numeric | puntos que arriesga el creador |
-| creator_id | uuid FK | |
-| taker_id | uuid FK | null hasta que alguien acepta |
-| status | text | open / accepted / resolved / void |
-| result_won_by | uuid | ganador tras liquidar |
-| created_at / resolved_at | timestamptz | |
+### `challenges` (retos 1-contra-varios)
+`id`, `match_id`, `creator_id`, `market` (`1x2`/`ou`/`btts`/`oddeven`/`exact`/`scorer`),
+`line` (para `ou`: 1.5/2.5/3.5), `selection` (lado/score/jugador), `odds` (congelada al crear),
+`stake`, `max_takers` (0 = sin límite), `status` (open/resolved/void), `created_at`,
+`resolved_at`, `creator_won`.
+
+### `challenge_takers` (cada rival que acepta un reto)
+`id`, `challenge_id`, `player_id`, `liability` (= `stake × (odds−1)`, reservada al aceptar),
+`created_at`. Único `(challenge_id, player_id)`.
 
 ---
 
-## 5. Flujo — Porra base (puntos por acertar)
+## 5. Porra base (puntos por acertar)
 
-1. El usuario ve la lista de partidos (próximos / en juego / finalizados).
-2. En un partido futuro pone su marcador (ej. `2-1`). **Poner el marcador es la acción base
-   obligatoria para "entrar" a un partido.** Editable hasta el pitido inicial; al empezar
-   (`status=live`) se bloquea.
-3. Al finalizar (`status=finished`), el cron reparte puntos = **base × factor de dificultad**:
-   - **Marcador exacto → base +50** *(configurable)*
-   - **Solo el ganador / empate acertado → base +20** *(configurable)*
-   - **Fallo → 0**
-4. Los puntos (ya multiplicados) entran en la hucha del jugador.
+1. El usuario pone su marcador a cada partido futuro (acción base obligatoria para "entrar").
+   Editable hasta el kickoff; al empezar se bloquea.
+2. Al finalizar, el cron reparte **puntos = base × factor de dificultad**:
+   - Marcador exacto → base **+50**; solo ganador/empate → base **+20**; fallo → 0.
 
-### 5.1 Factor de dificultad (más puntos si hay sorpresa)
+### 5.1 Factor de dificultad (sorpresa)
+De la fuerza de los dos equipos (Elo) se estima la probabilidad de cada resultado. El factor
+depende de la probabilidad del **resultado real**:
 
-El premio sube cuando el acierto era improbable. La "probabilidad" se estima con la **tabla de
-fuerza de selecciones** (ver §6, compartida con los retos): de la diferencia de fuerza entre
-los dos equipos se calcula, con un modelo logístico tipo Elo, la probabilidad de cada
-resultado (local / empate / visitante). El factor depende de la probabilidad del **resultado
-que realmente ocurrió**:
-
-| Probabilidad del resultado real | Etiqueta | Factor | Ej. ganador (base 20) | Ej. exacto (base 50) |
+| Prob. del resultado real | Etiqueta | Factor | Ej. ganador (20) | Ej. exacto (50) |
 |---|---|---|---|---|
-| ≥ 50 % | Favorito claro | ×1 | +20 | +50 |
-| 30 – 50 % | Igualado | ×1.5 | +30 | +75 |
+| ≥ 50 % | Favorito | ×1 | +20 | +50 |
+| 30–50 % | Igualado | ×1.5 | +30 | +75 |
 | < 30 % | **Sorpresa** | ×3 | +60 | +150 |
 
-- El factor se aplica **igual a marcador exacto y a solo-ganador** (el exacto ya paga más por
-  su base mayor).
-- **Se conoce de antemano:** cada partido muestra su etiqueta (Favorito / Igualado / Sorpresa)
-  y los puntos que pagaría, calculados antes del partido y congelados al iniciarse.
-- Umbrales y factores (50 %, 30 %, ×1.5, ×3) son **configurables** en un solo sitio.
+Se calcula y se muestra **antes** del partido (cada partido enseña su etiqueta) y se congela al
+empezar. Umbrales/factores configurables.
 
 ---
 
-## 6. Flujo — Retos 1 contra 1 (robar puntos)
+## 6. Retos (1 contra varios)
 
-Modelo *exchange* (mercado de apuestas entre amigos), matemática de cuota real:
+### Mercados (6)
+| Mercado | Selección | Resolución (marcador final / goleadores) |
+|---|---|---|
+| `1x2` Resultado | 1 / X / 2 | signo de a−b |
+| `ou` Más/Menos | over/under, línea 1.5/2.5/3.5 | a+b vs línea |
+| `btts` Ambos marcan | sí / no | a>0 y b>0 |
+| `oddeven` Par/Impar | par / impar | (a+b) % 2 |
+| `exact` Marcador exacto | un marcador (ej. 2-1) | a==x y b==y |
+| `scorer` Goleador | un jugador de la convocatoria | el jugador está en `scorers` |
 
-1. Sobre un partido (con equipos conocidos y aún no empezado), el usuario **crea un reto**:
-   elige `market`, `selection`, `odds` (pre-rellenada con una cuota sugerida desde una tabla
-   de fuerza de selecciones que incluimos; el creador puede ajustarla) y `stake` (puntos que
-   arriesga). Solo puede arriesgar puntos que tiene.
-2. Otro usuario **acepta el otro lado**. Su responsabilidad (puntos en riesgo) =
-   `stake × (odds − 1)`. Ejemplo: creador apuesta 100 a cuota 1.5 → quien acepta arriesga 50
-   para ganar los 100 del creador. Al aceptar, se reservan los puntos de ambos.
-3. Al finalizar el partido, el cron resuelve según `market`/`selection` y el resultado real:
-   - **el perdedor transfiere sus puntos reservados al ganador** (suma cero, robo literal).
-4. Retos en estado `open` (sin aceptar) al llegar el kickoff → `void`: se devuelven los
-   puntos reservados al creador.
+### Flujo
+1. Sobre un partido con equipos conocidos y no empezado, el creador elige mercado, selección,
+   **cuota** (pre-rellenada: real de casa si existe, si no del modelo), `stake` y
+   **`max_takers`** (1/2/3/5/∞). Se reserva `stake` del creador.
+2. Varios rivales aceptan (hasta `max_takers`). Cada aceptación reserva la
+   **responsabilidad del rival = `stake × (odds−1)`**, y reserva **otro `stake` del creador**
+   (su exposición crece por cada rival; si no le queda saldo, no admite más). Un usuario no
+   puede aceptar su propio reto ni dos veces.
+3. Al finalizar, por **cada par creador↔rival** (suma cero):
+   - Creador acierta → creador gana la responsabilidad del rival; rival la pierde.
+   - Creador falla → rival gana el `stake`; creador lo pierde.
+4. Reto sin rivales al kickoff → `void`, se devuelve el `stake` al creador.
 
-**Mercados soportados:** `1x2`, `ou25` (más/menos 2.5 goles), `btts` (ambos marcan).
-(No se incluye marcador exacto como reto en V1.)
-
-> **Nota sobre las cuotas:** las APIs gratuitas no traen cuotas de casa de apuestas. En el
-> modelo 1v1 la cuota la fija quien crea el reto, con una **sugerencia** calculada de una
-> **tabla estática de fuerza de selecciones** (estilo ranking FIFA/Elo) que se incluye en el
-> repo. Esa **misma tabla** alimenta el factor de dificultad de la porra base (§5.1). Cuota
-> exacta de una casa real requeriría una API de pago; queda fuera de alcance.
+> La cuota se **congela al crear** el reto (`challenges.odds`), así que las cuotas externas solo
+> se necesitan en ese momento (cacheadas), no en vivo.
 
 ---
 
 ## 7. Clasificación
-
-**Una sola hucha = una sola clasificación global** ordenada por `points`.
-- La porra base es el "sueldo" (sumas puntos acertando).
-- Los retos 1v1 son el "casino" (puntos se mueven entre jugadores).
-- No se puede quedar en negativo: solo se arriesga lo que se tiene; las reservas de retos
-  bloquean puntos disponibles.
-- Si un jugador se queda sin puntos, sigue pudiendo sumar con la porra base.
-
----
+Una sola hucha = una sola clasificación global por `points`. La porra base es el "sueldo"; los
+retos mueven puntos entre jugadores. No se puede quedar en negativo (solo se arriesga lo que se
+tiene; las reservas bloquean saldo disponible).
 
 ## 8. Identidad (sin códigos de grupo)
+Entras con tu nombre → `player` global; el dispositivo te recuerda (localStorage). Código de
+recuperación para otro dispositivo. Sin contraseñas (casual). RLS abierta (puntos ficticios,
+sin datos personales).
 
-- El usuario entra, escribe su nombre → se crea un `player` global; el dispositivo lo recuerda
-  (localStorage, con el mismo *fallback* a memoria que ya existe).
-- Se genera un `recovery_code` corto para recuperar la identidad en otro dispositivo.
-- Sin contraseñas (juego casual). RLS abierta como hoy (políticas `for all using (true)`),
-  dado que son puntos ficticios sin datos personales sensibles.
-
----
-
-## 9. Seguridad de saldo (integridad de puntos)
-
-Toda mutación de puntos va por **funciones atómicas** en Postgres (`security definer`),
-nunca por updates sueltos desde el cliente, para evitar carreras y trampas:
-- `place_prediction(match, player, a, b)` — valida que el partido no ha empezado.
-- `create_challenge(...)` / `accept_challenge(...)` — validan saldo y reservan puntos.
-- `settle_match(match)` — idempotente; reparte porra + resuelve retos; marca `settled`.
-
----
+## 9. Integridad de puntos
+Toda mutación de puntos va por funciones atómicas Postgres (`security definer`):
+`upsert_player`, `place_prediction`, `create_challenge`, `accept_challenge`, `settle_match`
+(idempotente), `void_started_open_challenges`.
 
 ## 10. Fuera de alcance (V1)
-
-- Cuotas reales de casa de apuestas en vivo (necesita API de pago).
-- Marcador exacto como mercado de reto 1v1.
+- Cuotas reales en vivo al segundo (se cachean 1-2×/día; suficiente porque se congelan al crear).
+- Cuotas reales para par/impar, exacto y goleador (no las dan gratis → modelo).
 - Cuentas con contraseña / login real.
-- Múltiples torneos (solo Mundial 2026).
+- Otros torneos (solo Mundial 2026).
 
----
-
-## 11. Parámetros configurables (en un solo sitio del código)
-
-| parámetro | valor por defecto |
+## 11. Parámetros configurables (un solo sitio)
+| parámetro | valor |
 |---|---|
 | Hucha inicial | 1000 |
-| Puntos base marcador exacto | +50 |
-| Puntos base solo ganador | +20 |
-| Umbrales de dificultad | ≥50 % ×1 · 30–50 % ×1.5 · <30 % ×3 |
-| Mercados de reto | 1x2, ou25, btts |
-| Frecuencia del cron | 5 min |
-| Fuente de datos | openfootball/worldcup.json |
-| Tabla de fuerza de selecciones | estática en el repo (ranking FIFA/Elo) |
+| Puntos base exacto / ganador | +50 / +20 |
+| Umbrales dificultad | ≥50% ×1 · 30–50% ×1.5 · <30% ×3 |
+| Mercados de reto | 1x2, ou(1.5/2.5/3.5), btts, oddeven, exact, scorer |
+| Cupo de rivales por reto | 1/2/3/5/∞ (default 3) |
+| Margen de cuota (modelo) | 6 % |
+| Frecuencia cron resultados | 5 min |
+| Frecuencia fetch cuotas | 1-2×/día (cache) |
+| Fuentes | openfootball worldcup.json + squads.json + The Odds API |
