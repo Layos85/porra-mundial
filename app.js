@@ -183,6 +183,10 @@ function matchCard(m){
       const tag=Number(pr.points)>0?`<span class="tagwin">+${fmt(pr.points)} pts ${exact?"🎯 exacto":"✅ ganador"}</span>`:`<span class="taglose">+0 · fallaste</span>`;
       body=`<div class="mypick">Tu pronóstico <b>${pr.pred_a}-${pr.pred_b}</b> · ${tag}</div>`;
     } else body=`<div class="muted small">No pronosticaste</div>`;
+  } else if(m.status==="live"){
+    center = (m.score_a!=null) ? `<div class="score"><span class="g">${m.score_a}</span> - <span class="g">${m.score_b}</span></div>` : `<div class="vs">vs</div>`;
+    const pr=myPreds[m.id];
+    body=`<div class="mypick" style="background:#2a1420;border-color:var(--surprise);color:#ffd2da">🔴 EN VIVO · apuestas cerradas${pr?` · tu pronóstico <b>${pr.pred_a}-${pr.pred_b}</b>`:""}</div>`;
   } else if(bettable(m)){
     center=`<div class="vs">vs</div>`;
     body=predictionZone(m)+newChallengeSlot(m);
