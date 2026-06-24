@@ -362,17 +362,18 @@ end; $$;
 create or replace function settle_match_main(p_match uuid)
 returns void language plpgsql security definer as $$
 declare m matches%rowtype; cfg config%rowtype; pr predictions%rowtype; ch challenges%rowtype;
-  v_out text; v_p numeric; v_f numeric; v_pts numeric; begin
+  v_out text; v_cw numeric; v_ce numeric; v_pts numeric; begin
   select * into m from matches where id=p_match;
   if not found or m.status<>'finished' or m.score_a is null or m.score_b is null or m.settled then return; end if;
   select * into cfg from config where id;
   if not coalesce(cfg.started,false) then return; end if;
   v_out := outcome_1x2(m.score_a,m.score_b);
-  v_p := case v_out when '1' then m.p_a when 'X' then m.p_draw else m.p_b end;
-  v_f := difficulty_factor(coalesce(v_p,1));
+  -- cuotas de casa: ganador 1X2 (real de The Odds API si existe, si no modelo) y marcador exacto (modelo)
+  v_cw := suggest_odds(p_match, '1x2', v_out, null);
+  v_ce := suggest_odds(p_match, 'exact', m.score_a::text||'-'||m.score_b::text, null);
   for pr in select * from predictions where match_id=p_match loop
-    if pr.pred_a=m.score_a and pr.pred_b=m.score_b then v_pts := cfg.pts_exact*v_f;
-    elsif outcome_1x2(pr.pred_a,pr.pred_b)=v_out then v_pts := cfg.pts_winner*v_f;
+    if pr.pred_a=m.score_a and pr.pred_b=m.score_b then v_pts := round(cfg.pts_exact*v_ce);
+    elsif outcome_1x2(pr.pred_a,pr.pred_b)=v_out then v_pts := round(cfg.pts_winner*v_cw);
     else v_pts := 0; end if;
     update predictions set points=v_pts where id=pr.id;
     if v_pts>0 then update players set points=points+v_pts where id=pr.player_id; end if;

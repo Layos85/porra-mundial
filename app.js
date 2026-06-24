@@ -188,8 +188,16 @@ function renderMatches(){
   }
   el.innerHTML=head+arr.map(matchCard).join("");
 }
-function dchip(name,p,isDraw){ const c=dclass(p),f=factor(p);
-  return `<div class="dchip ${c}"><div class="dk">${isDraw?"Empate":esc(name)}</div><div class="dv">×${f}</div><div class="dt">${dlabel(p)}</div></div>`; }
+function cuota1x2(m,k){
+  const o=m.odds&&m.odds['1x2']&&m.odds['1x2'][k];
+  if(o) return Number(o);
+  const p=k==='1'?Number(m.p_a):k==='X'?Number(m.p_draw):Number(m.p_b);
+  return p>0?Math.round((1/p)*0.94*100)/100:null;
+}
+function dchip(name,cuota){
+  const cls = cuota==null?"" : cuota<2.0?"fav" : cuota<4.0?"even":"surprise";
+  return `<div class="dchip ${cls}"><div class="dk">${esc(name)}</div><div class="dv">${cuota?cuota.toFixed(2):'—'}</div><div class="dt">cuota</div></div>`;
+}
 
 function myMatchBreakdown(m){
   const rows=[]; let total=0;
@@ -221,7 +229,7 @@ function breakdownHtml(m){
 }
 function matchCard(m){
   const pa=Number(m.p_a),pd=Number(m.p_draw),pb=Number(m.p_b);
-  const diff = (m.p_a!=null) ? `<div class="diff">${dchip(m.team_a,pa)}${dchip("Empate",pd,true)}${dchip(m.team_b,pb)}</div>` : "";
+  const diff = (m.p_a!=null||(m.odds&&m.odds['1x2'])) ? `<div class="diff">${dchip(m.team_a,cuota1x2(m,'1'))}${dchip("Empate",cuota1x2(m,'X'))}${dchip(m.team_b,cuota1x2(m,'2'))}</div>` : "";
   let center, body="";
   if(m.status==="finished"){
     center=`<div class="score"><span class="${m.score_a>m.score_b?'g':''}">${m.score_a}</span> - <span class="${m.score_b>m.score_a?'g':''}">${m.score_b}</span></div>`;
@@ -258,22 +266,28 @@ function predictionZone(m){
     if(pr) return `<div class="mypick">Tu pronóstico: <b>${pr.pred_a}-${pr.pred_b}</b> &nbsp;<button class="acc" style="background:transparent;color:var(--muted);border:1px solid var(--line)" onclick="startEdit('${m.id}')">Cambiar</button></div>`;
     return `<button class="btn gold sm" onclick="startEdit('${m.id}')">🎯 Poner mi marcador</button>`;
   }
-  const ea=editing.a,eb=editing.b;
-  const out=ea>eb?Number(m.p_a):ea<eb?Number(m.p_b):Number(m.p_draw);
-  const f=factor(out);
+  const ea=editing.a,eb=editing.b, cw=editing.cWin, ce=editing.cExact;
   return `<div class="predbox">
     <div class="stepper">
       <div class="stcol"><span class="sn">${esc(m.team_a)}</span><div class="stctl"><button onclick="step(-1,'a')">−</button><span class="num">${ea}</span><button onclick="step(1,'a')">+</button></div></div>
       <span class="stdash">–</span>
       <div class="stcol"><span class="sn">${esc(m.team_b)}</span><div class="stctl"><button onclick="step(-1,'b')">−</button><span class="num">${eb}</span><button onclick="step(1,'b')">+</button></div></div>
     </div>
-    <div class="preview">Si lo clavas: <b>+${fmt(50*f)}</b> · si solo aciertas quién gana: <b>+${fmt(20*f)}</b><br><span style="opacity:.8">(${dlabel(out)} ×${f})</span></div>
+    <div class="preview">🎯 Clavar el marcador: cuota <b>${ce?ce.toFixed(2):'…'}</b> → <b>+${ce?fmt(50*ce):'…'}</b><br>✅ Solo acertar quién gana: cuota <b>${cw?cw.toFixed(2):'…'}</b> → <b>+${cw?fmt(20*cw):'…'}</b></div>
     <div class="row2"><button class="btn ghost sm" onclick="cancelEdit()">Cancelar</button><button class="btn gold sm" onclick="savePred('${m.id}')">Guardar</button></div>
   </div>`;
 }
-function startEdit(id){ const pr=myPreds[id]; editing={matchId:id,a:pr?pr.pred_a:1,b:pr?pr.pred_b:0}; render(); }
+function startEdit(id){ const pr=myPreds[id]; editing={matchId:id,a:pr?pr.pred_a:1,b:pr?pr.pred_b:0,cWin:null,cExact:null}; render(); refreshPredOdds(); }
 function cancelEdit(){ editing=null; render(); }
-function step(d,side){ editing[side]=Math.max(0,editing[side]+d); render(); }
+function step(d,side){ editing[side]=Math.max(0,editing[side]+d); editing.cWin=null; editing.cExact=null; render(); refreshPredOdds(); }
+function refreshPredOdds(){
+  if(!editing) return; const e=editing;
+  const out=e.a>e.b?'1':e.a<e.b?'2':'X';
+  Promise.all([
+    sb.rpc('suggest_odds',{p_match:e.matchId,p_market:'1x2',p_selection:out,p_line:null}),
+    sb.rpc('suggest_odds',{p_match:e.matchId,p_market:'exact',p_selection:`${e.a}-${e.b}`,p_line:null})
+  ]).then(([cw,ce])=>{ if(editing!==e) return; if(!cw.error)editing.cWin=Number(cw.data); if(!ce.error)editing.cExact=Number(ce.data); render(); });
+}
 async function savePred(id){
   const {error}=await sb.rpc("place_prediction",{p_match:id,p_player:me.id,p_a:editing.a,p_b:editing.b});
   editing=null;
