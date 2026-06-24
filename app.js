@@ -8,7 +8,7 @@ const LS = { pid:"porra.playerId", rec:"porra.recovery" };
 let sb=null, me=null;
 let players=[], matches=[], challenges=[], takers=[], myPreds={};
 let pById={}, gameConfig=null;
-let tab="matches", filter="next", channel=null;
+let tab="matches", filter="next", channel=null, loggingIn=false;
 let editing=null;   // pronóstico en edición {matchId,a,b}
 let creating=null;  // reto en creación
 const squadCache={};
@@ -72,10 +72,12 @@ async function boot(){
   show("login");
 }
 async function doLogin(){
+  if(loggingIn) return;
   const name=$("loginName").value.trim(); if(!name) return toast("Escribe tu nombre",true);
+  loggingIn=true; $("loginBtn").disabled=true;
   const rec=genCode();
   const {data,error}=await sb.rpc("upsert_player",{p_name:name,p_recovery:rec});
-  if(error) return toast("Error: "+error.message,true);
+  if(error){ loggingIn=false; $("loginBtn").disabled=false; return toast("Error: "+error.message,true); }
   me=data; localStorage.setItem(LS.pid,me.id); localStorage.setItem(LS.rec,me.recovery_code);
   await afterLogin(); toast("¡Hola, "+esc(me.name)+"! Tu código: <b>"+me.recovery_code+"</b>",true);
 }

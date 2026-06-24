@@ -35,6 +35,8 @@ create table if not exists players (
   name text not null, recovery_code text unique not null,
   points numeric not null default 1000, created_at timestamptz default now()
 );
+-- nombre único (insensible a mayúsculas/espacios)
+create unique index if not exists players_name_uniq on players (lower(btrim(name)));
 
 -- ---------- Partidos (los llena el cron) ----------
 create table if not exists matches (
@@ -192,8 +194,14 @@ create or replace function upsert_player(p_name text, p_recovery text)
 returns players language plpgsql security definer as $$
 declare v players%rowtype; v_start numeric; begin
   select * into v from players where recovery_code=p_recovery; if found then return v; end if;
+  if exists (select 1 from players where lower(btrim(name))=lower(btrim(p_name))) then
+    raise exception 'Ese nombre ya está cogido, elige otro';
+  end if;
   select start_points into v_start from config where id;
-  insert into players(name,recovery_code,points) values (trim(p_name),p_recovery,v_start) returning * into v;
+  begin
+    insert into players(name,recovery_code,points) values (btrim(p_name),p_recovery,v_start) returning * into v;
+  exception when unique_violation then raise exception 'Ese nombre ya está cogido, elige otro';
+  end;
   update config set admin_id = v.id where admin_id is null;   -- el primero en entrar es el organizador
   return v;
 end; $$;
