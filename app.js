@@ -153,6 +153,8 @@ function reservedFor(pid){
   return r;
 }
 const totalFor = p => Number(p.points)+reservedFor(p.id);
+const bExact = () => Number((gameConfig&&gameConfig.pts_exact)||50);
+const bWin = () => Number((gameConfig&&gameConfig.pts_winner)||20);
 function render(){
   if(!me) return;
   $("avatar").textContent=ini(me.name);
@@ -273,7 +275,7 @@ function predictionZone(m){
       <span class="stdash">–</span>
       <div class="stcol"><span class="sn">${esc(m.team_b)}</span><div class="stctl"><button onclick="step(-1,'b')">−</button><span class="num">${eb}</span><button onclick="step(1,'b')">+</button></div></div>
     </div>
-    <div class="preview">🎯 Clavar el marcador: cuota <b>${ce?ce.toFixed(2):'…'}</b> → <b>+${ce?fmt(50*ce):'…'}</b><br>✅ Solo acertar quién gana: cuota <b>${cw?cw.toFixed(2):'…'}</b> → <b>+${cw?fmt(20*cw):'…'}</b></div>
+    <div class="preview">🎯 Clavar el marcador: cuota <b>${ce?ce.toFixed(2):'…'}</b> → <b>+${ce?fmt(bExact()*ce):'…'}</b><br>✅ Solo acertar quién gana: cuota <b>${cw?cw.toFixed(2):'…'}</b> → <b>+${cw?fmt(bWin()*cw):'…'}</b></div>
     <div class="row2"><button class="btn ghost sm" onclick="cancelEdit()">Cancelar</button><button class="btn gold sm" onclick="savePred('${m.id}')">Guardar</button></div>
   </div>`;
 }
