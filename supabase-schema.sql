@@ -342,5 +342,14 @@ declare known boolean; ra numeric; rb numeric; va numeric; vd numeric; vb numeri
     p_b=coalesce(matches.p_b,excluded.p_b);
 end; $$;
 
--- ---------- Realtime ----------
-alter publication supabase_realtime add table players, matches, predictions, challenges, challenge_takers;
+-- ---------- Realtime (idempotente) ----------
+do $$
+declare t text;
+begin
+  foreach t in array array['players','matches','predictions','challenges','challenge_takers'] loop
+    if not exists (select 1 from pg_publication_tables
+                   where pubname='supabase_realtime' and schemaname='public' and tablename=t) then
+      execute format('alter publication supabase_realtime add table public.%I', t);
+    end if;
+  end loop;
+end $$;
