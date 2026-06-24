@@ -239,7 +239,7 @@ declare v challenges%rowtype; s text; k timestamptz; known boolean; bal numeric;
   select status,kickoff,teams_known into s,k,known from matches where id=p_match;
   if not found then raise exception 'Partido no encontrado'; end if;
   if not known then raise exception 'Aún no se conocen los equipos'; end if;
-  if s<>'scheduled' or (k is not null and now()>=k) then raise exception 'El partido ya ha empezado'; end if;
+  if s<>'scheduled' or (k is not null and now()>=k - interval '1 minute') then raise exception 'Cerrado: falta menos de 1 minuto para el partido'; end if;
   if p_market not in ('1x2','ou','btts','oddeven','exact','scorer') then raise exception 'Mercado no válido'; end if;
   if p_odds<=1 then raise exception 'Cuota no válida'; end if;
   if p_stake<=0 then raise exception 'Puntos no válidos'; end if;
@@ -263,7 +263,7 @@ declare c challenges%rowtype; s text; k timestamptz; n integer; liab numeric; ba
   select count(*) into n from challenge_takers where challenge_id=p_challenge;
   if c.max_takers>0 and n>=c.max_takers then raise exception 'Reto completo'; end if;
   select status,kickoff into s,k from matches where id=c.match_id;
-  if s<>'scheduled' or (k is not null and now()>=k) then raise exception 'El partido ya ha empezado'; end if;
+  if s<>'scheduled' or (k is not null and now()>=k - interval '1 minute') then raise exception 'Cerrado: falta menos de 1 minuto para el partido'; end if;
   liab := round(c.stake*(c.odds-1));
   select points into bal from players where id=p_taker for update;
   if bal<liab then raise exception 'Saldo insuficiente para cubrir el reto'; end if;
@@ -274,6 +274,48 @@ declare c challenges%rowtype; s text; k timestamptz; n integer; liab numeric; ba
     update players set points=points-c.stake where id=c.creator_id;
   end if;
   insert into challenge_takers(challenge_id,player_id,liability) values (p_challenge,p_taker,liab);
+end; $$;
+
+-- Cancelar un reto (solo el creador, solo si NADIE lo ha aceptado, hasta 1 min antes).
+create or replace function cancel_challenge(p_challenge uuid, p_player uuid)
+returns void language plpgsql security definer as $$
+declare c challenges%rowtype; k timestamptz; n int; begin
+  select * into c from challenges where id=p_challenge for update;
+  if not found then raise exception 'Reto no encontrado'; end if;
+  if c.creator_id<>p_player then raise exception 'Solo el creador puede cancelar el reto'; end if;
+  if c.status<>'open' then raise exception 'El reto ya no se puede cancelar'; end if;
+  select count(*) into n from challenge_takers where challenge_id=c.id;
+  if n>0 then raise exception 'No puedes cancelar: alguien ya ha aceptado el reto'; end if;
+  select kickoff into k from matches where id=c.match_id;
+  if k is not null and now()>=k - interval '1 minute' then raise exception 'Demasiado tarde: falta menos de 1 minuto para el partido'; end if;
+  update players set points=points + c.stake where id=c.creator_id;   -- devolver reserva (n=0 => 1 stake)
+  update challenges set status='void', resolved_at=now() where id=c.id;
+end; $$;
+
+-- Modificar un reto (solo el creador, solo si NADIE lo ha aceptado, hasta 1 min antes).
+create or replace function update_challenge(p_challenge uuid, p_player uuid, p_market text, p_line numeric,
+  p_selection text, p_odds numeric, p_stake numeric, p_max integer)
+returns void language plpgsql security definer as $$
+declare c challenges%rowtype; k timestamptz; n int; delta numeric; bal numeric; begin
+  select * into c from challenges where id=p_challenge for update;
+  if not found then raise exception 'Reto no encontrado'; end if;
+  if c.creator_id<>p_player then raise exception 'Solo el creador puede modificar el reto'; end if;
+  if c.status<>'open' then raise exception 'El reto ya no se puede modificar'; end if;
+  select count(*) into n from challenge_takers where challenge_id=c.id;
+  if n>0 then raise exception 'No puedes modificar: alguien ya ha aceptado el reto'; end if;
+  select kickoff into k from matches where id=c.match_id;
+  if k is not null and now()>=k - interval '1 minute' then raise exception 'Demasiado tarde: falta menos de 1 minuto para el partido'; end if;
+  if p_market not in ('1x2','ou','btts','oddeven','exact','scorer') then raise exception 'Mercado no válido'; end if;
+  if p_odds<=1 then raise exception 'Cuota no válida'; end if;
+  if p_stake<=0 then raise exception 'Puntos no válidos'; end if;
+  delta := p_stake - c.stake;   -- ajustar reserva del creador (n=0 => reserva actual = c.stake)
+  if delta>0 then
+    select points into bal from players where id=p_player for update;
+    if bal<delta then raise exception 'Saldo insuficiente'; end if;
+  end if;
+  update players set points=points-delta where id=p_player;
+  update challenges set market=p_market, line=p_line, selection=p_selection, odds=p_odds, stake=p_stake, max_takers=coalesce(p_max,0)
+    where id=c.id;
 end; $$;
 
 -- ============================================================

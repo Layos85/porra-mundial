@@ -230,6 +230,7 @@ function challengesFor(m){
   const list=challenges.filter(c=>c.match_id===m.id && c.status!=="void");
   if(!list.length) return "";
   const started=m.status!=="scheduled";
+  const editable=bettable(m);
   return `<div class="duel-h">Retos</div>`+list.map(c=>{
     const L=Math.round(c.stake*(c.odds-1));
     const myT=takers.filter(t=>t.challenge_id===c.id);
@@ -244,7 +245,11 @@ function challengesFor(m){
       if(mine) action=c.creator_won?`<span class="tagwin">ganaste ×${myT.length}</span>`:`<span class="taglose">perdiste</span>`;
       else if(iAccepted) action=(!c.creator_won)?`<span class="tagwin">ganaste</span>`:`<span class="taglose">perdiste</span>`;
       else action=`<small>resuelto</small>`;
-    } else if(mine){ action=`<span class="who2" style="font-size:.72rem;color:var(--muted)">tu reto · ${cupo} rivales</span>`; }
+    } else if(mine){
+      action = (myT.length===0 && editable)
+        ? `<span style="display:inline-flex;gap:6px"><button class="acc" style="background:var(--card2);color:var(--ink);border:1px solid var(--line)" onclick="editBet('${c.id}')">✏️</button><button class="acc" style="background:var(--card2);color:var(--bad);border:1px solid var(--line)" onclick="cancelBet('${c.id}')">🗑</button></span>`
+        : `<span class="who2" style="font-size:.72rem;color:var(--muted)">tu reto · ${cupo} rivales</span>`;
+    }
     else if(iAccepted){ action=`<span class="who2" style="font-size:.72rem;color:var(--good)">aceptado ✓</span>`; }
     else if(started){ action=`<small>cerrado</small>`; }
     else if(full){ action=`<small style="color:var(--surprise)">completo</small>`; }
@@ -257,7 +262,7 @@ function challengesFor(m){
   }).join("");
 }
 function newChallengeSlot(m){
-  if(!creating || creating.matchId!==m.id) return `<button class="btn ghost sm" style="margin-top:8px" onclick="startChallenge('${m.id}')">⚔️ Retar a otros (1 vs varios)</button>`;
+  if(!creating || creating.matchId!==m.id) return bettable(m) ? `<button class="btn ghost sm" style="margin-top:8px" onclick="startChallenge('${m.id}')">⚔️ Retar a otros (1 vs varios)</button>` : "";
   const mk=creating.market, conf=MARKETS[mk];
   const marketBtns=Object.keys(MARKETS).map(k=>`<button class="${k===mk?'on':''}" onclick="setMarket('${m.id}','${k}')">${MK_LABEL[k]}</button>`).join("");
   let lineUI=""; if(mk==="ou") lineUI=`<label>Línea de goles</label><div class="seg">${conf.lines.map(L=>`<button class="${L===creating.line?'on':''}" onclick="setLine(${L})">${L}</button>`).join("")}</div>`;
@@ -284,7 +289,7 @@ function newChallengeSlot(m){
     <label>Puntos que te juegas</label><input class="stake" type="number" min="1" value="${creating.stake}" oninput="setStake(this.value)">
     <label>¿Cuántos pueden aceptar?</label><div class="seg">${[1,2,3,5,0].map(n=>`<button class="${n===creating.max?'on':''}" onclick="setMax(${n})">${n===0?"∞":n}</button>`).join("")}</div>
     <div class="cmeta">Cuota <b>×${typeof odds==="number"?odds.toFixed(2):odds}</b> · ganas <b>+${fmt(liab)}</b> por cada rival que pierda contra ti · arriesgas <b>${fmt(creating.stake)}</b> por cada uno${creating.max?` · máx ${creating.max}`:" · sin límite"}</div>
-    <div class="row2"><button class="btn ghost sm" onclick="cancelChallenge()">Cancelar</button><button class="btn gold sm" onclick="postChallenge('${m.id}')">Publicar reto</button></div>
+    <div class="row2"><button class="btn ghost sm" onclick="cancelChallenge()">Cancelar</button><button class="btn gold sm" onclick="postChallenge('${m.id}')">${creating.editId?'Guardar cambios':'Publicar reto'}</button></div>
   </div>`;
 }
 async function startChallenge(id){
@@ -292,6 +297,20 @@ async function startChallenge(id){
   await loadSquads(id); await refreshOdds(); render();
 }
 function cancelChallenge(){ creating=null; render(); }
+function bettable(m){ return m.status==='scheduled' && (!m.kickoff || Date.now() < new Date(m.kickoff).getTime()-60000); }
+async function editBet(id){
+  const c=challenges.find(x=>x.id===id); if(!c) return;
+  creating={matchId:c.match_id, editId:c.id, market:c.market, line:Number(c.line)||2.5, sel:c.selection, exa:1, exb:0, stake:Number(c.stake), max:c.max_takers, odds:Number(c.odds)};
+  if(c.market==='exact'){ const p=String(c.selection).split('-').map(Number); creating.exa=p[0]||0; creating.exb=p[1]||0; }
+  if(c.market==='scorer') await loadSquads(c.match_id);
+  render();
+}
+async function cancelBet(id){
+  if(!confirm("¿Cancelar este reto? Se te devuelven los puntos.")) return;
+  const {error}=await sb.rpc("cancel_challenge",{p_challenge:id,p_player:me.id});
+  if(error) return toast("Error: "+error.message,true);
+  await refresh(); toast("Reto cancelado 🗑");
+}
 async function loadSquads(matchId){
   if(squadCache[matchId]) return;
   const m=matches.find(x=>x.id===matchId); if(!m) return;
@@ -322,8 +341,14 @@ function setMax(n){ creating.max=n; render(); }
 async function postChallenge(id){
   const c=creating;
   if(!(c.odds>1)) return toast("Cuota no válida",true);
+  const sel=curSel();
+  if(c.editId){
+    const {error}=await sb.rpc("update_challenge",{p_challenge:c.editId,p_player:me.id,p_market:c.market,p_line:c.market==="ou"?c.line:null,p_selection:sel,p_odds:c.odds,p_stake:c.stake,p_max:c.max});
+    creating=null; if(error) return toast("Error: "+error.message,true);
+    await refresh(); toast("Reto actualizado ✏️"); return;
+  }
   if(c.stake>me.points) return toast("No tienes tantos puntos",true);
-  const {error}=await sb.rpc("create_challenge",{p_match:id,p_creator:me.id,p_market:c.market,p_line:c.market==="ou"?c.line:null,p_selection:curSel(),p_odds:c.odds,p_stake:c.stake,p_max:c.max});
+  const {error}=await sb.rpc("create_challenge",{p_match:id,p_creator:me.id,p_market:c.market,p_line:c.market==="ou"?c.line:null,p_selection:sel,p_odds:c.odds,p_stake:c.stake,p_max:c.max});
   creating=null;
   if(error) return toast("Error: "+error.message,true);
   await refresh(); toast("Reto publicado ⚔️ — ya pueden aceptarlo");
@@ -352,6 +377,6 @@ function wire(){
   $("tabMatchesBtn").addEventListener("click",()=>setTab("matches"));
   $("tabRankBtn").addEventListener("click",()=>setTab("rank"));
   document.querySelectorAll(".filters button").forEach(b=>b.addEventListener("click",()=>setFilter(b.dataset.f,b)));
-  Object.assign(window,{startEdit,cancelEdit,step,savePred,startChallenge,cancelChallenge,setMarket,setSel,setLine,setScorer,exStep,setStake,setOdds,setMax,postChallenge,accept,startGame});
+  Object.assign(window,{startEdit,cancelEdit,step,savePred,startChallenge,cancelChallenge,setMarket,setSel,setLine,setScorer,exStep,setStake,setOdds,setMax,postChallenge,accept,startGame,editBet,cancelBet});
 }
 document.addEventListener("DOMContentLoaded",()=>{ wire(); boot(); });
