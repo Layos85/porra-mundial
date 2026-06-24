@@ -1,10 +1,13 @@
 -- ============================================================
 --  Automatización dentro de Supabase (pg_cron + pg_net)
---  Trae calendario/resultados de openfootball, hace upsert y liquida.
---  Cada 15 min, sin servicios externos.
+--  Patrón de 2 tics: un tic dispara la descarga, el siguiente la procesa
+--  (pg_net entrega la respuesta tras el commit, no en la misma transacción).
 -- ============================================================
 create extension if not exists pg_net;
 create extension if not exists pg_cron;
+
+-- Estado del cron: guarda el id de la última petición de cada job.
+create table if not exists cron_state (name text primary key, req_id bigint);
 
 -- Procesa el JSON de openfootball: upsert de partidos + void + liquidación.
 create or replace function sync_from_json(payload jsonb)
@@ -45,18 +48,20 @@ begin
   return n;
 end; $$;
 
--- Tic del cron: descarga + procesa + limpia respuestas viejas.
+-- Tic del cron: procesa la respuesta del tic anterior y dispara la siguiente descarga.
 create or replace function cron_sync()
 returns void language plpgsql security definer as $$
-declare rid bigint; body jsonb;
+declare body jsonb; last bigint; newid bigint;
 begin
-  rid := net.http_get('https://raw.githubusercontent.com/openfootball/worldcup.json/master/2026/worldcup.json');
-  perform pg_sleep(5);
-  select content::jsonb into body from net._http_response where id=rid and status_code=200;
-  if body is not null then perform sync_from_json(body); end if;
-  delete from net._http_response where created < now() - interval '1 hour';
+  select req_id into last from cron_state where name='sync';
+  if last is not null then
+    select content::jsonb into body from net._http_response where id=last and status_code=200;
+    if body is not null then perform sync_from_json(body); end if;
+  end if;
+  newid := net.http_get('https://raw.githubusercontent.com/openfootball/worldcup.json/master/2026/worldcup.json');
+  insert into cron_state(name,req_id) values('sync',newid) on conflict(name) do update set req_id=excluded.req_id;
+  delete from net._http_response where created < now() - interval '2 hours';
 end; $$;
 
--- Programar cada 15 min (idempotente).
 select cron.unschedule(jobid) from cron.job where jobname='porra-sync';
 select cron.schedule('porra-sync','*/15 * * * *', 'select cron_sync()');
