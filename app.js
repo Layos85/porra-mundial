@@ -19,7 +19,7 @@ const fmt = n => Math.round(Number(n)||0).toLocaleString("es-ES");
 const ini = s => (s||"?").trim().slice(0,2).toUpperCase();
 function esc(s){return String(s==null?"":s).replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));}
 function toast(m,big=false){const t=$("toast");t.innerHTML=m;t.classList.toggle("big",big);t.classList.add("show");clearTimeout(t._t);t._t=setTimeout(()=>t.classList.remove("show"),big?3600:2600);}
-function show(s){["login","lobby","app"].forEach(x=>$("screen-"+x).classList.toggle("hide",x!==s));}
+function show(s){["login","app"].forEach(x=>$("screen-"+x).classList.toggle("hide",x!==s));}
 function genCode(){const c="ABCDEFGHJKLMNPQRSTUVWXYZ23456789";let r="";for(let i=0;i<6;i++)r+=c[Math.floor(Math.random()*c.length)];return "PM-"+r;}
 
 const FLAG = {
@@ -87,25 +87,21 @@ async function doRecover(){
   await afterLogin(); toast("Cuenta recuperada 👋");
 }
 async function afterLogin(){ await refresh(); subscribe(); route(); }
-function route(){
-  if(!me) return;
-  if(!gameConfig || !gameConfig.started){ show("lobby"); renderLobby(); }
-  else { show("app"); render(); }
-}
-function renderLobby(){
-  const isAdmin = gameConfig && gameConfig.admin_id===me.id;
-  $("lobbyCount").textContent = players.length;
-  $("lobbyList").innerHTML = players.map(p=>`<div class="lb">
-    <span class="av">${ini(p.name)}</span>
-    <span class="nm">${esc(p.name)}${p.id===me.id?' <small>tú</small>':''}${gameConfig&&gameConfig.admin_id===p.id?' <small style="color:var(--gold)">organizador</small>':''}</span>
-  </div>`).join("");
-  $("lobbyAction").innerHTML = isAdmin
-    ? `<button class="btn gold" onclick="startGame()">🚀 Comenzar la porra</button>
-       <p class="muted small" style="margin-top:10px">Pulsa cuando estén todos. Al empezar se abren los pronósticos y los retos.</p>`
-    : `<p class="muted">Esperando a que el organizador pulse <b>Comenzar</b>…</p>`;
+function route(){ if(!me) return; show("app"); render(); }
+function renderPreBanner(){
+  const pb=$("preBanner"); if(!pb) return;
+  if(gameConfig && !gameConfig.started){
+    const isAdmin = gameConfig.admin_id===me.id;
+    const adm = pById[gameConfig.admin_id];
+    pb.style.display="";
+    pb.innerHTML = `🚧 <b>Porra en preparación</b> · ${players.length} dentro. Ya puedes pronosticar y retar; <b>se resuelve cuando el organizador pulse Comenzar</b>.`
+      + (isAdmin
+        ? `<div style="margin-top:8px"><button class="btn gold sm" style="width:auto" onclick="startGame()">🚀 Comenzar la porra</button></div>`
+        : `<div class="small" style="margin-top:6px">Esperando a <b>${esc(adm?adm.name:"el organizador")}</b>…</div>`);
+  } else pb.style.display="none";
 }
 async function startGame(){
-  if(!confirm("¿Comenzar la porra para todos? A partir de ahora se puede pronosticar y retar.")) return;
+  if(!confirm("¿Comenzar la porra? Las apuestas pasan a contar y se resolverán los partidos que vayan acabando.")) return;
   const {error}=await sb.rpc("start_game",{p_player:me.id});
   if(error) return toast("Error: "+error.message,true);
   await refresh(); toast("¡Porra en marcha! 🚀",true);
@@ -147,6 +143,7 @@ function render(){
   $("avatar").textContent=ini(me.name);
   $("userName").textContent=me.name;
   $("userPts").textContent=fmt(me.points)+" 🪙";
+  renderPreBanner();
   if(tab==="matches") renderMatches(); else renderRank();
 }
 function setTab(t){ tab=t;

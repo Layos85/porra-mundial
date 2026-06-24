@@ -201,16 +201,16 @@ end; $$;
 -- Comenzar la porra (solo el organizador)
 create or replace function start_game(p_player uuid)
 returns void language plpgsql security definer as $$
-declare adm uuid; begin
+declare adm uuid; mid uuid; begin
   select admin_id into adm from config where id;
   if adm is null or adm<>p_player then raise exception 'Solo el organizador puede empezar la porra'; end if;
   update config set started=true where id;
+  for mid in select id from matches where status='finished' and settled=false loop perform settle_match(mid); end loop;
 end; $$;
 
 create or replace function place_prediction(p_match uuid, p_player uuid, p_a integer, p_b integer)
 returns void language plpgsql security definer as $$
 declare s text; k timestamptz; known boolean; begin
-  if not (select started from config where id) then raise exception 'La porra todavía no ha empezado'; end if;
   select status,kickoff,teams_known into s,k,known from matches where id=p_match;
   if not found then raise exception 'Partido no encontrado'; end if;
   if not known then raise exception 'Aún no se conocen los equipos'; end if;
@@ -228,7 +228,6 @@ create or replace function create_challenge(
   p_selection text, p_odds numeric, p_stake numeric, p_max integer)
 returns challenges language plpgsql security definer as $$
 declare v challenges%rowtype; s text; k timestamptz; known boolean; bal numeric; begin
-  if not (select started from config where id) then raise exception 'La porra todavía no ha empezado'; end if;
   select status,kickoff,teams_known into s,k,known from matches where id=p_match;
   if not found then raise exception 'Partido no encontrado'; end if;
   if not known then raise exception 'Aún no se conocen los equipos'; end if;
@@ -247,7 +246,6 @@ end; $$;
 create or replace function accept_challenge(p_challenge uuid, p_taker uuid)
 returns void language plpgsql security definer as $$
 declare c challenges%rowtype; s text; k timestamptz; n integer; liab numeric; bal numeric; begin
-  if not (select started from config where id) then raise exception 'La porra todavía no ha empezado'; end if;
   select * into c from challenges where id=p_challenge for update;
   if not found then raise exception 'Reto no encontrado'; end if;
   if c.status<>'open' then raise exception 'El reto ya no está disponible'; end if;
@@ -293,6 +291,7 @@ declare m matches%rowtype; cfg config%rowtype; pr predictions%rowtype; ch challe
   select * into m from matches where id=p_match;
   if not found or m.status<>'finished' or m.score_a is null or m.score_b is null or m.settled then return; end if;
   select * into cfg from config where id;
+  if not coalesce(cfg.started,false) then return; end if;   -- no se liquida hasta que el organizador da Comenzar
   v_out := outcome_1x2(m.score_a,m.score_b);
   v_p := case v_out when '1' then m.p_a when 'X' then m.p_draw else m.p_b end;
   v_f := difficulty_factor(coalesce(v_p,1));

@@ -199,8 +199,6 @@
   .hide{display:none!important}
   .muted{color:var(--muted)} .small{font-size:.8rem}
   hr{border:none;border-top:1px solid var(--line)}
-  .lb .av{margin-right:4px}
-  #lobbyList .lb{cursor:default}
 </style>
 </head>
 <body>
@@ -223,18 +221,6 @@
   </div>
 </section>
 
-<section id="screen-lobby" class="hide">
-  <div class="phone" style="padding-top:32px">
-    <div class="match" style="text-align:center">
-      <div class="crest" style="margin:0 auto 10px">⚽</div>
-      <h2 style="margin:0 0 4px">Sala de espera</h2>
-      <p class="muted small" style="margin:0 0 14px"><b id="lobbyCount">0</b> jugadores dentro</p>
-      <div id="lobbyList" style="text-align:left;margin-bottom:16px"></div>
-      <div id="lobbyAction"></div>
-    </div>
-  </div>
-</section>
-
 <section id="screen-app" class="hide">
   <div class="phone">
     <div class="top">
@@ -243,6 +229,7 @@
       <div class="bank"><span id="userPts">0</span></div>
       <button id="myCodeBtn" class="btn ghost sm" style="width:auto;margin-left:8px">Código</button>
     </div>
+    <div id="preBanner" class="ribbon" style="display:none;margin-top:12px"></div>
     <div class="tabs">
       <button id="tabMatchesBtn" class="on">Partidos</button>
       <button id="tabRankBtn">Clasificación</button>
