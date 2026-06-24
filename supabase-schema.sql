@@ -18,6 +18,8 @@ create table if not exists config (
   odds_margin  numeric not null default 0.94
 );
 insert into config (id) values (true) on conflict (id) do nothing;
+alter table config add column if not exists started  boolean not null default false;
+alter table config add column if not exists admin_id uuid;
 
 -- ---------- Selecciones / convocatorias ----------
 create table if not exists team_strength ( name text primary key, rating numeric not null );
@@ -192,12 +194,23 @@ declare v players%rowtype; v_start numeric; begin
   select * into v from players where recovery_code=p_recovery; if found then return v; end if;
   select start_points into v_start from config where id;
   insert into players(name,recovery_code,points) values (trim(p_name),p_recovery,v_start) returning * into v;
+  update config set admin_id = v.id where admin_id is null;   -- el primero en entrar es el organizador
   return v;
+end; $$;
+
+-- Comenzar la porra (solo el organizador)
+create or replace function start_game(p_player uuid)
+returns void language plpgsql security definer as $$
+declare adm uuid; begin
+  select admin_id into adm from config where id;
+  if adm is null or adm<>p_player then raise exception 'Solo el organizador puede empezar la porra'; end if;
+  update config set started=true where id;
 end; $$;
 
 create or replace function place_prediction(p_match uuid, p_player uuid, p_a integer, p_b integer)
 returns void language plpgsql security definer as $$
 declare s text; k timestamptz; known boolean; begin
+  if not (select started from config where id) then raise exception 'La porra todavía no ha empezado'; end if;
   select status,kickoff,teams_known into s,k,known from matches where id=p_match;
   if not found then raise exception 'Partido no encontrado'; end if;
   if not known then raise exception 'Aún no se conocen los equipos'; end if;
@@ -215,6 +228,7 @@ create or replace function create_challenge(
   p_selection text, p_odds numeric, p_stake numeric, p_max integer)
 returns challenges language plpgsql security definer as $$
 declare v challenges%rowtype; s text; k timestamptz; known boolean; bal numeric; begin
+  if not (select started from config where id) then raise exception 'La porra todavía no ha empezado'; end if;
   select status,kickoff,teams_known into s,k,known from matches where id=p_match;
   if not found then raise exception 'Partido no encontrado'; end if;
   if not known then raise exception 'Aún no se conocen los equipos'; end if;
@@ -233,6 +247,7 @@ end; $$;
 create or replace function accept_challenge(p_challenge uuid, p_taker uuid)
 returns void language plpgsql security definer as $$
 declare c challenges%rowtype; s text; k timestamptz; n integer; liab numeric; bal numeric; begin
+  if not (select started from config where id) then raise exception 'La porra todavía no ha empezado'; end if;
   select * into c from challenges where id=p_challenge for update;
   if not found then raise exception 'Reto no encontrado'; end if;
   if c.status<>'open' then raise exception 'El reto ya no está disponible'; end if;
@@ -346,7 +361,7 @@ end; $$;
 do $$
 declare t text;
 begin
-  foreach t in array array['players','matches','predictions','challenges','challenge_takers'] loop
+  foreach t in array array['config','players','matches','predictions','challenges','challenge_takers'] loop
     if not exists (select 1 from pg_publication_tables
                    where pubname='supabase_realtime' and schemaname='public' and tablename=t) then
       execute format('alter publication supabase_realtime add table public.%I', t);
