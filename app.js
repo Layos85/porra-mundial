@@ -171,18 +171,41 @@ function renderMatches(){
 function dchip(name,p,isDraw){ const c=dclass(p),f=factor(p);
   return `<div class="dchip ${c}"><div class="dk">${isDraw?"Empate":esc(name)}</div><div class="dv">×${f}</div><div class="dt">${dlabel(p)}</div></div>`; }
 
+function myMatchBreakdown(m){
+  const rows=[]; let total=0;
+  const pr=myPreds[m.id];
+  if(pr && pr.points!=null){
+    const exact=pr.pred_a===m.score_a&&pr.pred_b===m.score_b;
+    rows.push({label:`🎯 Pronóstico ${pr.pred_a}-${pr.pred_b}${Number(pr.points)>0?(exact?" (exacto)":" (ganador)"):" (fallado)"}`, pts:Number(pr.points)});
+    total+=Number(pr.points);
+  }
+  challenges.filter(c=>c.match_id===m.id && c.status==='resolved').forEach(c=>{
+    const myT=takers.filter(t=>t.challenge_id===c.id);
+    const iCreator=c.creator_id===me.id, iTaker=myT.some(t=>t.player_id===me.id);
+    if(!iCreator && !iTaker) return;
+    const L=Math.round(c.stake*(c.odds-1)); let net;
+    if(iCreator){ const n=myT.length; net=c.creator_won? L*n : -c.stake*n; }
+    else { net=(!c.creator_won)? c.stake : -L; }
+    const who=iCreator?"Tu reto":"Reto de "+(pById[c.creator_id]?pById[c.creator_id].name:"?");
+    rows.push({label:`⚔️ ${who}: ${MK_LABEL[c.market]} · ${selName(m,c.market,c.selection,c.line)}`, pts:net});
+    total+=net;
+  });
+  return {rows,total};
+}
+function breakdownHtml(m){
+  const {rows,total}=myMatchBreakdown(m);
+  if(!rows.length) return `<div class="muted small">No apostaste en este partido</div>`;
+  const col=p=>p>0?'var(--good)':p<0?'var(--bad)':'var(--muted)';
+  const items=rows.map(r=>`<div class="w"><span>${esc(r.label)}</span><span style="color:${col(r.pts)};font-weight:700">${r.pts>0?'+':''}${fmt(r.pts)}</span></div>`).join("");
+  return `<div class="wager-list">${items}<div class="w" style="border-top:1px solid var(--line);margin-top:5px;padding-top:7px"><span><b>Tu balance</b></span><span style="color:${col(total)};font-weight:800">${total>0?'+':''}${fmt(total)} pts</span></div></div>`;
+}
 function matchCard(m){
   const pa=Number(m.p_a),pd=Number(m.p_draw),pb=Number(m.p_b);
   const diff = (m.p_a!=null) ? `<div class="diff">${dchip(m.team_a,pa)}${dchip("Empate",pd,true)}${dchip(m.team_b,pb)}</div>` : "";
   let center, body="";
   if(m.status==="finished"){
     center=`<div class="score"><span class="${m.score_a>m.score_b?'g':''}">${m.score_a}</span> - <span class="${m.score_b>m.score_a?'g':''}">${m.score_b}</span></div>`;
-    const pr=myPreds[m.id];
-    if(pr){
-      const exact=pr.pred_a===m.score_a&&pr.pred_b===m.score_b;
-      const tag=Number(pr.points)>0?`<span class="tagwin">+${fmt(pr.points)} pts ${exact?"🎯 exacto":"✅ ganador"}</span>`:`<span class="taglose">+0 · fallaste</span>`;
-      body=`<div class="mypick">Tu pronóstico <b>${pr.pred_a}-${pr.pred_b}</b> · ${tag}</div>`;
-    } else body=`<div class="muted small">No pronosticaste</div>`;
+    body=breakdownHtml(m);
   } else if(m.status==="live"){
     center = (m.score_a!=null) ? `<div class="score"><span class="g">${m.score_a}</span> - <span class="g">${m.score_b}</span></div>` : `<div class="vs">vs</div>`;
     const pr=myPreds[m.id];
