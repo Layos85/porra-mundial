@@ -142,11 +142,25 @@ function subscribe(){
 /* ============================================================
    RENDER
    ============================================================ */
+function reservedFor(pid){
+  let r=0;
+  challenges.filter(c=>c.status==='open').forEach(c=>{
+    const cT=takers.filter(t=>t.challenge_id===c.id);
+    if(c.creator_id===pid) r+=Number(c.stake)*Math.max(1,cT.length);
+    const mt=cT.find(x=>x.player_id===pid);
+    if(mt) r+=Number(mt.liability);
+  });
+  return r;
+}
+const totalFor = p => Number(p.points)+reservedFor(p.id);
 function render(){
   if(!me) return;
   $("avatar").textContent=ini(me.name);
   $("userName").textContent=me.name;
-  $("userPts").textContent=fmt(me.points)+" 🪙";
+  const reserved=reservedFor(me.id), total=Number(me.points)+reserved;
+  $("userPts").textContent=fmt(total)+" 🪙";
+  const sub=document.querySelector("#screen-app .who small");
+  if(sub) sub.textContent = reserved>0 ? `${fmt(me.points)} libre · ${fmt(reserved)} en juego` : "todo libre";
   renderPreBanner();
   if(tab==="matches") renderMatches(); else renderRank();
 }
@@ -408,13 +422,15 @@ async function accept(id){
 
 /* ---------- clasificación ---------- */
 function renderRank(){
-  const sorted=[...players].sort((a,b)=>Number(b.points)-Number(a.points));
-  $("viewRank").innerHTML=sorted.map((p,i)=>`<div class="lb ${p.id===me.id?'me':''}">
+  const sorted=[...players].sort((a,b)=>totalFor(b)-totalFor(a));
+  $("viewRank").innerHTML=sorted.map((p,i)=>{
+    const res=reservedFor(p.id);
+    return `<div class="lb ${p.id===me.id?'me':''}">
     <span class="pos">${i===0?"🥇":i===1?"🥈":i===2?"🥉":i+1}</span>
     <span class="av">${ini(p.name)}</span>
-    <span class="nm">${esc(p.name)}${p.id===me.id?' <small>tú</small>':''}</span>
-    <span class="pts">${fmt(p.points)} pts</span></div>`).join("")
-    || `<div class="empty">Aún no hay jugadores.</div>`;
+    <span class="nm">${esc(p.name)}${p.id===me.id?' <small>tú</small>':''}${res>0?`<small>${fmt(res)} en juego</small>`:''}</span>
+    <span class="pts">${fmt(totalFor(p))} 🪙</span></div>`;
+  }).join("") || `<div class="empty">Aún no hay jugadores.</div>`;
 }
 
 /* ---------- wiring ---------- */
