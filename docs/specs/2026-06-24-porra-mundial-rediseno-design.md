@@ -128,11 +128,31 @@ Restricción única `(match_id, player_id)` — un pronóstico por jugador y par
 2. En un partido futuro pone su marcador (ej. `2-1`). **Poner el marcador es la acción base
    obligatoria para "entrar" a un partido.** Editable hasta el pitido inicial; al empezar
    (`status=live`) se bloquea.
-3. Al finalizar (`status=finished`), el cron reparte puntos:
-   - **Marcador exacto → +50 puntos** *(configurable)*
-   - **Solo el ganador / empate acertado → +20 puntos** *(configurable)*
+3. Al finalizar (`status=finished`), el cron reparte puntos = **base × factor de dificultad**:
+   - **Marcador exacto → base +50** *(configurable)*
+   - **Solo el ganador / empate acertado → base +20** *(configurable)*
    - **Fallo → 0**
-4. Los puntos entran en la hucha del jugador.
+4. Los puntos (ya multiplicados) entran en la hucha del jugador.
+
+### 5.1 Factor de dificultad (más puntos si hay sorpresa)
+
+El premio sube cuando el acierto era improbable. La "probabilidad" se estima con la **tabla de
+fuerza de selecciones** (ver §6, compartida con los retos): de la diferencia de fuerza entre
+los dos equipos se calcula, con un modelo logístico tipo Elo, la probabilidad de cada
+resultado (local / empate / visitante). El factor depende de la probabilidad del **resultado
+que realmente ocurrió**:
+
+| Probabilidad del resultado real | Etiqueta | Factor | Ej. ganador (base 20) | Ej. exacto (base 50) |
+|---|---|---|---|---|
+| ≥ 50 % | Favorito claro | ×1 | +20 | +50 |
+| 30 – 50 % | Igualado | ×1.5 | +30 | +75 |
+| < 30 % | **Sorpresa** | ×3 | +60 | +150 |
+
+- El factor se aplica **igual a marcador exacto y a solo-ganador** (el exacto ya paga más por
+  su base mayor).
+- **Se conoce de antemano:** cada partido muestra su etiqueta (Favorito / Igualado / Sorpresa)
+  y los puntos que pagaría, calculados antes del partido y congelados al iniciarse.
+- Umbrales y factores (50 %, 30 %, ×1.5, ×3) son **configurables** en un solo sitio.
 
 ---
 
@@ -157,8 +177,9 @@ Modelo *exchange* (mercado de apuestas entre amigos), matemática de cuota real:
 
 > **Nota sobre las cuotas:** las APIs gratuitas no traen cuotas de casa de apuestas. En el
 > modelo 1v1 la cuota la fija quien crea el reto, con una **sugerencia** calculada de una
-> tabla estática de fuerza de selecciones (estilo ranking FIFA/Elo) que se incluye en el
-> repo. Cuota exacta de una casa real requeriría una API de pago; queda fuera de alcance.
+> **tabla estática de fuerza de selecciones** (estilo ranking FIFA/Elo) que se incluye en el
+> repo. Esa **misma tabla** alimenta el factor de dificultad de la porra base (§5.1). Cuota
+> exacta de una casa real requeriría una API de pago; queda fuera de alcance.
 
 ---
 
@@ -207,8 +228,10 @@ nunca por updates sueltos desde el cliente, para evitar carreras y trampas:
 | parámetro | valor por defecto |
 |---|---|
 | Hucha inicial | 1000 |
-| Puntos marcador exacto | +50 |
-| Puntos solo ganador | +20 |
+| Puntos base marcador exacto | +50 |
+| Puntos base solo ganador | +20 |
+| Umbrales de dificultad | ≥50 % ×1 · 30–50 % ×1.5 · <30 % ×3 |
 | Mercados de reto | 1x2, ou25, btts |
 | Frecuencia del cron | 5 min |
 | Fuente de datos | openfootball/worldcup.json |
+| Tabla de fuerza de selecciones | estática en el repo (ranking FIFA/Elo) |
