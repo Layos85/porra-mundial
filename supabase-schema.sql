@@ -51,6 +51,7 @@ create table if not exists matches (
   settled boolean not null default false,
   created_at timestamptz default now()
 );
+alter table matches add column if not exists pens integer not null default 0;   -- goles de penalti
 
 -- ---------- Pronósticos (porra base) ----------
 create table if not exists predictions (
@@ -181,6 +182,7 @@ begin
     elsif p_market='scorer' then
       if exists (select 1 from team_squads where team=m.team_a and player=p_selection)
         then pp := 1-exp(-lam.la/6); else pp := 1-exp(-lam.lb/6); end if;
+    elsif p_market='pens' then pp := 0.28; if p_selection='no' then pp := 1-pp; end if;
     else pp := 0.5; end if;
   end if;
   if pp is null or pp<0.004 then pp := 0.004; end if;
@@ -240,7 +242,7 @@ declare v challenges%rowtype; s text; k timestamptz; known boolean; bal numeric;
   if not found then raise exception 'Partido no encontrado'; end if;
   if not known then raise exception 'Aún no se conocen los equipos'; end if;
   if s<>'scheduled' or (k is not null and now()>=k - interval '1 minute') then raise exception 'Cerrado: falta menos de 1 minuto para el partido'; end if;
-  if p_market not in ('1x2','ou','btts','oddeven','exact','scorer') then raise exception 'Mercado no válido'; end if;
+  if p_market not in ('1x2','ou','btts','oddeven','exact','scorer','pens') then raise exception 'Mercado no válido'; end if;
   if p_odds<=1 then raise exception 'Cuota no válida'; end if;
   if p_stake<=0 then raise exception 'Puntos no válidos'; end if;
   select points into bal from players where id=p_creator for update;
@@ -305,7 +307,7 @@ declare c challenges%rowtype; k timestamptz; n int; delta numeric; bal numeric; 
   if n>0 then raise exception 'No puedes modificar: alguien ya ha aceptado el reto'; end if;
   select kickoff into k from matches where id=c.match_id;
   if k is not null and now()>=k - interval '1 minute' then raise exception 'Demasiado tarde: falta menos de 1 minuto para el partido'; end if;
-  if p_market not in ('1x2','ou','btts','oddeven','exact','scorer') then raise exception 'Mercado no válido'; end if;
+  if p_market not in ('1x2','ou','btts','oddeven','exact','scorer','pens') then raise exception 'Mercado no válido'; end if;
   if p_odds<=1 then raise exception 'Cuota no válida'; end if;
   if p_stake<=0 then raise exception 'Puntos no válidos'; end if;
   delta := p_stake - c.stake;   -- ajustar reserva del creador (n=0 => reserva actual = c.stake)
@@ -321,8 +323,9 @@ end; $$;
 -- ============================================================
 --  Liquidación (porra + retos), idempotente
 -- ============================================================
+drop function if exists challenge_creator_wins(text,numeric,text,integer,integer,jsonb);
 create or replace function challenge_creator_wins(p_market text, p_line numeric, p_sel text,
-  a integer, b integer, p_scorers jsonb)
+  a integer, b integer, p_scorers jsonb, p_pens integer default 0)
 returns boolean language sql immutable as $$
   select case p_market
     when '1x2'  then outcome_1x2(a,b)=p_sel
@@ -331,6 +334,7 @@ returns boolean language sql immutable as $$
     when 'oddeven' then (case when (a+b)%2=0 then 'par' else 'impar' end)=p_sel
     when 'exact' then p_sel = a::text||'-'||b::text
     when 'scorer' then p_scorers ? p_sel
+    when 'pens' then (case when p_pens>=1 then 'si' else 'no' end)=p_sel
     else false end;
 $$;
 
@@ -359,7 +363,7 @@ declare m matches%rowtype; cfg config%rowtype; pr predictions%rowtype; ch challe
       update players set points=points+ch.stake where id=ch.creator_id;
       update challenges set status='void', resolved_at=now() where id=ch.id; continue;
     end if;
-    won := challenge_creator_wins(ch.market, ch.line, ch.selection, m.score_a, m.score_b, m.scorers);
+    won := challenge_creator_wins(ch.market, ch.line, ch.selection, m.score_a, m.score_b, m.scorers, m.pens);
     for tk in select * from challenge_takers where challenge_id=ch.id loop
       if won then update players set points=points+ch.stake+tk.liability where id=ch.creator_id;
       else update players set points=points+tk.liability+ch.stake where id=tk.player_id; end if;
@@ -384,9 +388,10 @@ end; $$;
 -- ============================================================
 --  Upsert de partido (lo llama el cron)
 -- ============================================================
+drop function if exists upsert_match(text,text,text,text,text,timestamptz,text,integer,integer,jsonb);
 create or replace function upsert_match(
   p_ext text, p_stage text, p_grp text, p_a text, p_b text,
-  p_kick timestamptz, p_status text, p_sa integer, p_sb integer, p_scorers jsonb)
+  p_kick timestamptz, p_status text, p_sa integer, p_sb integer, p_scorers jsonb, p_pens integer default 0)
 returns void language plpgsql security definer as $$
 declare known boolean; ra numeric; rb numeric; va numeric; vd numeric; vb numeric; begin
   select count(*)=2 into known from team_strength where name in (p_a,p_b);
@@ -395,13 +400,13 @@ declare known boolean; ra numeric; rb numeric; va numeric; vd numeric; vb numeri
     select rating into rb from team_strength where name=p_b;
     select cp.p_a, cp.p_draw, cp.p_b into va, vd, vb from calc_probs(ra,rb) cp;
   end if;
-  insert into matches(ext_id,stage,grp,team_a,team_b,teams_known,kickoff,status,score_a,score_b,scorers,p_a,p_draw,p_b)
-  values (p_ext,p_stage,p_grp,p_a,p_b,known,p_kick,p_status,p_sa,p_sb,coalesce(p_scorers,'[]'),
+  insert into matches(ext_id,stage,grp,team_a,team_b,teams_known,kickoff,status,score_a,score_b,scorers,pens,p_a,p_draw,p_b)
+  values (p_ext,p_stage,p_grp,p_a,p_b,known,p_kick,p_status,p_sa,p_sb,coalesce(p_scorers,'[]'),coalesce(p_pens,0),
           va, vd, vb)
   on conflict (ext_id) do update set
     stage=excluded.stage, grp=excluded.grp, team_a=excluded.team_a, team_b=excluded.team_b,
     teams_known=excluded.teams_known, kickoff=excluded.kickoff, status=excluded.status,
-    score_a=excluded.score_a, score_b=excluded.score_b, scorers=excluded.scorers,
+    score_a=excluded.score_a, score_b=excluded.score_b, scorers=excluded.scorers, pens=excluded.pens,
     p_a=coalesce(matches.p_a,excluded.p_a), p_draw=coalesce(matches.p_draw,excluded.p_draw),
     p_b=coalesce(matches.p_b,excluded.p_b);
 end; $$;

@@ -19,6 +19,7 @@ function kick(date,time){ if(!date)return null; const t=(time||'').match(/(\d{1,
   return `${date}T${hh}:${t[2]}:00${sign}${oh}:00`; }
 function status(m,k,now){ if(m.score&&m.score.ft&&m.score.ft.length===2)return'finished'; if(k&&now>=new Date(k))return'live'; return'scheduled'; }
 const scorers = m => [...(m.goals1||[]),...(m.goals2||[])].map(g=>g.name);
+const pens = m => [...(m.goals1||[]),...(m.goals2||[])].filter(g=>g.penalty).length;
 
 (async()=>{
   const data = await (await fetch(SRC,{headers:{'cache-control':'no-cache'}})).json();
@@ -29,10 +30,10 @@ const scorers = m => [...(m.goals1||[]),...(m.goals2||[])].map(g=>g.name);
   for(const m of data.matches||[]){
     const a=m.team1||'', b=m.team2||''; if(!a||!b||!m.date) continue;
     const k=kick(m.date,m.time);
-    await c.query('select upsert_match($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)',
+    await c.query('select upsert_match($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)',
       [extId(m),mapStage(m.round),grp(m.group),a,b,k,status(m,k,now),
        m.score&&m.score.ft?m.score.ft[0]:null, m.score&&m.score.ft?m.score.ft[1]:null,
-       JSON.stringify(scorers(m))]);
+       JSON.stringify(scorers(m)), pens(m)]);
     n++;
   }
   await c.query('select void_started_open_challenges()');

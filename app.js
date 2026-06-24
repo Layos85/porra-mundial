@@ -35,7 +35,7 @@ const FLAG = {
 };
 const flag = t => FLAG[t] || "🏳️";
 const STAGE = {grupos:"Grupos",dieciseisavos:"Dieciseisavos",octavos:"Octavos",cuartos:"Cuartos",semis:"Semis",tercer_puesto:"3er puesto",final:"Final"};
-const MK_LABEL = {"1x2":"Resultado","ou":"Más/Menos","btts":"Ambos marcan","oddeven":"Par/Impar","exact":"Marcador exacto","scorer":"Goleador"};
+const MK_LABEL = {"1x2":"Resultado","ou":"Más/Menos","btts":"Ambos marcan","oddeven":"Par/Impar","exact":"Marcador exacto","scorer":"Goleador","pens":"Gol de penalti"};
 function selName(m, mk, sel, line){
   switch(mk){
     case "1x2":  return sel==="1"?"Gana "+m.team_a : sel==="X"?"Empate" : "Gana "+m.team_b;
@@ -44,6 +44,7 @@ function selName(m, mk, sel, line){
     case "oddeven": return sel==="par"?"Goles par":"Goles impar";
     case "exact": return "Será "+sel;
     case "scorer": return "Marca "+sel;
+    case "pens": return sel==="si"?"Habrá gol de penalti":"Sin gol de penalti";
     default: return sel;
   }
 }
@@ -173,9 +174,13 @@ function matchCard(m){
       const tag=Number(pr.points)>0?`<span class="tagwin">+${fmt(pr.points)} pts ${exact?"🎯 exacto":"✅ ganador"}</span>`:`<span class="taglose">+0 · fallaste</span>`;
       body=`<div class="mypick">Tu pronóstico <b>${pr.pred_a}-${pr.pred_b}</b> · ${tag}</div>`;
     } else body=`<div class="muted small">No pronosticaste</div>`;
-  } else {
+  } else if(bettable(m)){
     center=`<div class="vs">vs</div>`;
     body=predictionZone(m)+newChallengeSlot(m);
+  } else {
+    center=`<div class="vs">vs</div>`;
+    const pr=myPreds[m.id];
+    body=`<div class="mypick" style="background:#1c343b;border-color:var(--line);color:var(--muted)">🔒 Apuestas cerradas${pr?` · tu pronóstico <b>${pr.pred_a}-${pr.pred_b}</b>`:""}</div>`;
   }
   const ko = m.kickoff ? new Date(m.kickoff).toLocaleString("es-ES",{day:"2-digit",month:"short",hour:"2-digit",minute:"2-digit"}) : "";
   return `<div class="match">
@@ -224,7 +229,7 @@ async function savePred(id){
 const MARKETS={
   "1x2":{sides:["1","X","2"]}, "ou":{sides:["over","under"],lines:[1.5,2.5,3.5]},
   "btts":{sides:["si","no"]}, "oddeven":{sides:["par","impar"]},
-  "exact":{sides:["score"]}, "scorer":{sides:["player"]}
+  "exact":{sides:["score"]}, "scorer":{sides:["player"]}, "pens":{sides:["si","no"]}
 };
 function challengesFor(m){
   const list=challenges.filter(c=>c.match_id===m.id && c.status!=="void");

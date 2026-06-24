@@ -14,7 +14,7 @@ create or replace function sync_from_json(payload jsonb)
 returns integer language plpgsql security definer as $$
 declare m jsonb; n int:=0; v_ext text; v_stage text; v_grp text; v_a text; v_b text;
   v_kick timestamptz; v_status text; v_sa int; v_sb int; v_scorers jsonb;
-  v_tm text[]; v_off text[]; iso text; r text; mid uuid;
+  v_tm text[]; v_off text[]; iso text; r text; mid uuid; v_pens int;
 begin
   for m in select jsonb_array_elements(payload->'matches') loop
     v_a := m->>'team1'; v_b := m->>'team2';
@@ -38,7 +38,10 @@ begin
     else v_sa := null; v_sb := null; v_status := case when v_kick is not null and now()>=v_kick then 'live' else 'scheduled' end; end if;
     v_scorers := coalesce((select jsonb_agg(g->>'name')
         from jsonb_array_elements(coalesce(m->'goals1','[]'::jsonb)||coalesce(m->'goals2','[]'::jsonb)) g),'[]'::jsonb);
-    perform upsert_match(v_ext,v_stage,v_grp,v_a,v_b,v_kick,v_status,v_sa,v_sb,v_scorers);
+    select count(*) into v_pens
+        from jsonb_array_elements(coalesce(m->'goals1','[]'::jsonb)||coalesce(m->'goals2','[]'::jsonb)) g
+        where (g->>'penalty')='true';
+    perform upsert_match(v_ext,v_stage,v_grp,v_a,v_b,v_kick,v_status,v_sa,v_sb,v_scorers,v_pens);
     n := n+1;
   end loop;
   perform void_started_open_challenges();
