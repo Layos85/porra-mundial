@@ -30,10 +30,11 @@ const pens = m => [...(m.goals1||[]),...(m.goals2||[])].filter(g=>g.penalty).len
   for(const m of data.matches||[]){
     const a=m.team1||'', b=m.team2||''; if(!a||!b||!m.date) continue;
     const k=kick(m.date,m.time);
-    await c.query('select upsert_match($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)',
+    const sc=m.score||{}; const play=sc.et||sc.ft||null;
+    await c.query('select upsert_match($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)',
       [extId(m),mapStage(m.round),grp(m.group),a,b,k,status(m,k,now),
-       m.score&&m.score.ft?m.score.ft[0]:null, m.score&&m.score.ft?m.score.ft[1]:null,
-       JSON.stringify(scorers(m)), pens(m)]);
+       play?play[0]:null, play?play[1]:null,
+       JSON.stringify(scorers(m)), pens(m), sc.p?sc.p[0]:null, sc.p?sc.p[1]:null]);
     n++;
   }
   await c.query('select void_started_open_challenges()');

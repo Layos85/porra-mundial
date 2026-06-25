@@ -235,7 +235,7 @@ function matchCard(m){
   let center, body="";
   if(m.status==="finished"){
     center=`<div class="score"><span class="${m.score_a>m.score_b?'g':''}">${m.score_a}</span> - <span class="${m.score_b>m.score_a?'g':''}">${m.score_b}</span></div>`;
-    body=breakdownHtml(m);
+    body=(m.pen_a!=null?`<div class="small muted" style="text-align:center;margin:-2px 0 8px">🥅 Penaltis ${m.pen_a}-${m.pen_b}</div>`:"")+breakdownHtml(m);
   } else if(m.status==="live"){
     center = (m.score_a!=null) ? `<div class="score"><span class="g">${m.score_a}</span> - <span class="g">${m.score_b}</span></div>` : `<div class="vs">vs</div>`;
     const pr=myPreds[m.id];

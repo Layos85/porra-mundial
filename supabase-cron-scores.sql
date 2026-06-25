@@ -32,7 +32,7 @@ begin
           score_a=(case when mt.team_a=home then s_home else s_away end)::int,
           score_b=(case when mt.team_b=home then s_home else s_away end)::int
         where id=mt.id;
-        perform settle_match_main(mt.id);   -- liquida ya porra + resultado/marcador/+-/ambos/par-impar
+        if mt.stage='grupos' then perform settle_match_main(mt.id); end if;  -- eliminatorias: esperar a openfootball (ET/penaltis)
       else
         update matches set status='live',
           score_a=(case when mt.team_a=home then s_home else s_away end)::int,

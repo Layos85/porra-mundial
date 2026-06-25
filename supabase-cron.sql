@@ -14,7 +14,7 @@ create or replace function sync_from_json(payload jsonb)
 returns integer language plpgsql security definer as $$
 declare m jsonb; n int:=0; v_ext text; v_stage text; v_grp text; v_a text; v_b text;
   v_kick timestamptz; v_status text; v_sa int; v_sb int; v_scorers jsonb;
-  v_tm text[]; v_off text[]; iso text; r text; mid uuid; v_pens int;
+  v_tm text[]; v_off text[]; iso text; r text; mid uuid; v_pens int; v_pa int; v_pb int;
 begin
   for m in select jsonb_array_elements(payload->'matches') loop
     v_a := m->>'team1'; v_b := m->>'team2';
@@ -34,14 +34,20 @@ begin
     end if;
     begin v_kick := iso::timestamptz; exception when others then v_kick := null; end;
     if (m->'score'->'ft') is not null then
-      v_sa := (m->'score'->'ft'->>0)::int; v_sb := (m->'score'->'ft'->>1)::int; v_status := 'finished';
-    else v_sa := null; v_sb := null; v_status := case when v_kick is not null and now()>=v_kick then 'live' else 'scheduled' end; end if;
+      -- marcador final de juego: ET si hubo prórroga, si no FT
+      if (m->'score'->'et') is not null then v_sa := (m->'score'->'et'->>0)::int; v_sb := (m->'score'->'et'->>1)::int;
+      else v_sa := (m->'score'->'ft'->>0)::int; v_sb := (m->'score'->'ft'->>1)::int; end if;
+      if (m->'score'->'p') is not null then v_pa := (m->'score'->'p'->>0)::int; v_pb := (m->'score'->'p'->>1)::int;
+      else v_pa := null; v_pb := null; end if;
+      v_status := 'finished';
+    else v_sa := null; v_sb := null; v_pa := null; v_pb := null;
+      v_status := case when v_kick is not null and now()>=v_kick then 'live' else 'scheduled' end; end if;
     v_scorers := coalesce((select jsonb_agg(g->>'name')
         from jsonb_array_elements(coalesce(m->'goals1','[]'::jsonb)||coalesce(m->'goals2','[]'::jsonb)) g),'[]'::jsonb);
     select count(*) into v_pens
         from jsonb_array_elements(coalesce(m->'goals1','[]'::jsonb)||coalesce(m->'goals2','[]'::jsonb)) g
         where (g->>'penalty')='true';
-    perform upsert_match(v_ext,v_stage,v_grp,v_a,v_b,v_kick,v_status,v_sa,v_sb,v_scorers,v_pens);
+    perform upsert_match(v_ext,v_stage,v_grp,v_a,v_b,v_kick,v_status,v_sa,v_sb,v_scorers,v_pens,v_pa,v_pb);
     n := n+1;
     if v_status='finished' then
       select id into mid from matches where ext_id=v_ext;

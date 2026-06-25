@@ -54,6 +54,21 @@ create table if not exists matches (
 );
 alter table matches add column if not exists pens integer not null default 0;   -- goles de penalti
 alter table matches add column if not exists settled_scorers boolean not null default false;  -- goleador/penalti liquidados (necesitan datos de openfootball)
+alter table matches add column if not exists pen_a integer;   -- tanda de penaltis (eliminatorias)
+alter table matches add column if not exists pen_b integer;
+
+-- Ganador a efectos de apuesta: en eliminatorias incluye los penaltis (no hay empate).
+-- Devuelve '1'/'X'/'2' o NULL si es eliminatoria empatada sin penaltis aún conocidos.
+create or replace function match_outcome(p_match uuid) returns text
+language plpgsql stable as $$
+declare m matches%rowtype; begin
+  select * into m from matches where id=p_match;
+  if m.score_a is null or m.score_b is null then return null; end if;
+  if m.stage='grupos' then return outcome_1x2(m.score_a,m.score_b); end if;
+  if m.score_a>m.score_b then return '1'; elsif m.score_a<m.score_b then return '2';
+  elsif m.pen_a is not null and m.pen_b is not null then return case when m.pen_a>m.pen_b then '1' else '2' end;
+  else return null; end if;   -- eliminatoria empatada, penaltis aún desconocidos
+end; $$;
 
 -- ---------- Pronósticos (porra base) ----------
 create table if not exists predictions (
@@ -326,11 +341,12 @@ end; $$;
 --  Liquidación (porra + retos), idempotente
 -- ============================================================
 drop function if exists challenge_creator_wins(text,numeric,text,integer,integer,jsonb);
+drop function if exists challenge_creator_wins(text,numeric,text,integer,integer,jsonb,integer);
 create or replace function challenge_creator_wins(p_market text, p_line numeric, p_sel text,
-  a integer, b integer, p_scorers jsonb, p_pens integer default 0)
+  a integer, b integer, p_scorers jsonb, p_pens integer default 0, p_outcome text default null)
 returns boolean language sql immutable as $$
   select case p_market
-    when '1x2'  then outcome_1x2(a,b)=p_sel
+    when '1x2'  then coalesce(p_outcome, outcome_1x2(a,b))=p_sel
     when 'ou'   then case when p_sel='over' then (a+b) > p_line else (a+b) < p_line end
     when 'btts' then (case when a>0 and b>0 then 'si' else 'no' end)=p_sel
     when 'oddeven' then (case when (a+b)%2=0 then 'par' else 'impar' end)=p_sel
@@ -341,7 +357,7 @@ returns boolean language sql immutable as $$
 $$;
 
 -- Liquida UN reto (paga a creador o rivales). Helper común.
-create or replace function settle_one_challenge(p_ch uuid, sa integer, sb integer, p_scorers jsonb, p_pens integer)
+create or replace function settle_one_challenge(p_ch uuid, sa integer, sb integer, p_scorers jsonb, p_pens integer, p_outcome text default null)
 returns void language plpgsql security definer as $$
 declare ch challenges%rowtype; tk challenge_takers%rowtype; won boolean; begin
   select * into ch from challenges where id=p_ch for update;
@@ -350,7 +366,7 @@ declare ch challenges%rowtype; tk challenge_takers%rowtype; won boolean; begin
     update players set points=points+ch.stake where id=ch.creator_id;
     update challenges set status='void', resolved_at=now() where id=ch.id; return;
   end if;
-  won := challenge_creator_wins(ch.market, ch.line, ch.selection, sa, sb, p_scorers, p_pens);
+  won := challenge_creator_wins(ch.market, ch.line, ch.selection, sa, sb, p_scorers, p_pens, p_outcome);
   for tk in select * from challenge_takers where challenge_id=ch.id loop
     if won then update players set points=points+ch.stake+tk.liability where id=ch.creator_id;
     else update players set points=points+tk.liability+ch.stake where id=tk.player_id; end if;
@@ -367,7 +383,8 @@ declare m matches%rowtype; cfg config%rowtype; pr predictions%rowtype; ch challe
   if not found or m.status<>'finished' or m.score_a is null or m.score_b is null or m.settled then return; end if;
   select * into cfg from config where id;
   if not coalesce(cfg.started,false) then return; end if;
-  v_out := outcome_1x2(m.score_a,m.score_b);
+  v_out := match_outcome(p_match);   -- ganador con penaltis en eliminatorias
+  if v_out is null then return; end if;   -- eliminatoria empatada sin penaltis aún: esperar a openfootball
   -- cuotas de casa: ganador 1X2 (real de The Odds API si existe, si no modelo) y marcador exacto (modelo)
   v_cw := suggest_odds(p_match, '1x2', v_out, null);
   v_ce := suggest_odds(p_match, 'exact', m.score_a::text||'-'||m.score_b::text, null);
@@ -379,7 +396,7 @@ declare m matches%rowtype; cfg config%rowtype; pr predictions%rowtype; ch challe
     if v_pts>0 then update players set points=points+v_pts where id=pr.player_id; end if;
   end loop;
   for ch in select * from challenges where match_id=p_match and status='open' and market in ('1x2','ou','btts','oddeven','exact') loop
-    perform settle_one_challenge(ch.id, m.score_a, m.score_b, m.scorers, m.pens);
+    perform settle_one_challenge(ch.id, m.score_a, m.score_b, m.scorers, m.pens, v_out);
   end loop;
   update matches set settled=true where id=p_match;
 end; $$;
@@ -418,9 +435,11 @@ end; $$;
 --  Upsert de partido (lo llama el cron)
 -- ============================================================
 drop function if exists upsert_match(text,text,text,text,text,timestamptz,text,integer,integer,jsonb);
+drop function if exists upsert_match(text,text,text,text,text,timestamptz,text,integer,integer,jsonb,integer);
 create or replace function upsert_match(
   p_ext text, p_stage text, p_grp text, p_a text, p_b text,
-  p_kick timestamptz, p_status text, p_sa integer, p_sb integer, p_scorers jsonb, p_pens integer default 0)
+  p_kick timestamptz, p_status text, p_sa integer, p_sb integer, p_scorers jsonb,
+  p_pens integer default 0, p_pen_a integer default null, p_pen_b integer default null)
 returns void language plpgsql security definer as $$
 declare known boolean; ra numeric; rb numeric; va numeric; vd numeric; vb numeric; begin
   select count(*)=2 into known from team_strength where name in (p_a,p_b);
@@ -429,8 +448,8 @@ declare known boolean; ra numeric; rb numeric; va numeric; vd numeric; vb numeri
     select rating into rb from team_strength where name=p_b;
     select cp.p_a, cp.p_draw, cp.p_b into va, vd, vb from calc_probs(ra,rb) cp;
   end if;
-  insert into matches(ext_id,stage,grp,team_a,team_b,teams_known,kickoff,status,score_a,score_b,scorers,pens,p_a,p_draw,p_b)
-  values (p_ext,p_stage,p_grp,p_a,p_b,known,p_kick,p_status,p_sa,p_sb,coalesce(p_scorers,'[]'),coalesce(p_pens,0),
+  insert into matches(ext_id,stage,grp,team_a,team_b,teams_known,kickoff,status,score_a,score_b,scorers,pens,pen_a,pen_b,p_a,p_draw,p_b)
+  values (p_ext,p_stage,p_grp,p_a,p_b,known,p_kick,p_status,p_sa,p_sb,coalesce(p_scorers,'[]'),coalesce(p_pens,0),p_pen_a,p_pen_b,
           va, vd, vb)
   on conflict (ext_id) do update set
     stage=excluded.stage, grp=excluded.grp, team_a=excluded.team_a, team_b=excluded.team_b,
@@ -438,6 +457,7 @@ declare known boolean; ra numeric; rb numeric; va numeric; vd numeric; vb numeri
     status=case when excluded.status='finished' or matches.status='finished' then 'finished' else excluded.status end,
     score_a=coalesce(excluded.score_a, matches.score_a), score_b=coalesce(excluded.score_b, matches.score_b),
     scorers=excluded.scorers, pens=excluded.pens,
+    pen_a=coalesce(excluded.pen_a, matches.pen_a), pen_b=coalesce(excluded.pen_b, matches.pen_b),
     p_a=coalesce(matches.p_a,excluded.p_a), p_draw=coalesce(matches.p_draw,excluded.p_draw),
     p_b=coalesce(matches.p_b,excluded.p_b);
 end; $$;
